@@ -198,6 +198,13 @@ ipcMain.handle("save-video", async (_e, { buffer, suggested, format }) => {
     return { saved: true, path: filePath };
   }
 
+  // Si ffmpeg no está disponible, guarda el WebM en lugar de fallar.
+  if (!ffmpegPath) {
+    const alt = filePath.replace(/\.(mp4|mov)$/i, ".webm");
+    fs.writeFileSync(alt, Buffer.from(buffer));
+    return { saved: true, path: alt, note: "ffmpeg no disponible: guardado como WebM. Ejecuta 'npm install'." };
+  }
+
   // Escribe el WebM temporal y transcodifica al destino MP4/MOV.
   const tmp = path.join(os.tmpdir(), `pss-${Date.now()}.webm`);
   try {
@@ -205,7 +212,14 @@ ipcMain.handle("save-video", async (_e, { buffer, suggested, format }) => {
     await transcode(tmp, filePath);
     return { saved: true, path: filePath };
   } catch (e) {
-    return { saved: false, error: e.message };
+    // Último recurso: deja el WebM junto al destino.
+    const alt = filePath.replace(/\.(mp4|mov)$/i, ".webm");
+    try {
+      fs.writeFileSync(alt, Buffer.from(buffer));
+      return { saved: true, path: alt, note: "Falló la conversión; guardado como WebM. " + e.message };
+    } catch {
+      return { saved: false, error: e.message };
+    }
   } finally {
     fs.rmSync(tmp, { force: true });
   }

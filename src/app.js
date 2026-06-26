@@ -788,7 +788,7 @@ async function exportVideo() {
 
   hide("exporting");
   S.exporting = false;
-  if (r.saved) showToast(`Guardado: ${r.path}`, true);
+  if (r.saved) showToast(r.note ? `⚠ ${r.note}` : `Guardado: ${r.path}`, !r.note);
   else if (r.error) showToast(`No se pudo convertir: ${r.error}`);
 }
 
