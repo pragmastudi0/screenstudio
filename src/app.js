@@ -236,6 +236,9 @@ async function loadVideoBlob(blob) {
   // Dimensiones pares (requisito de H.264 al exportar MP4/MOV).
   canvas.width = ow - (ow % 2);
   canvas.height = oh - (oh % 2);
+  // Recorte por defecto: todo el video.
+  S.trimStart = 0;
+  S.trimEnd = S.duration;
 }
 
 function enterEditor() {
@@ -399,6 +402,8 @@ async function saveProjectFn() {
   const state = {
     version: 1,
     duration: S.duration,
+    trimStart: S.trimStart,
+    trimEnd: S.trimEnd,
     clicks: S.clicks,
     moves: S.moves,
     segments: S.segments,
@@ -430,6 +435,8 @@ async function openProjectFn() {
   S.recordedBlob = new Blob([new Uint8Array(r.video)], { type: "video/webm" });
   await loadVideoBlob(S.recordedBlob);
   S.duration = st.duration || S.duration;
+  S.trimStart = st.trimStart != null ? st.trimStart : 0;
+  S.trimEnd = st.trimEnd != null ? st.trimEnd : S.duration;
   enterEditor();
   showToast("Proyecto cargado ✓", true);
 }
@@ -638,10 +645,12 @@ function drawCursor(ctx, px, py, ref, style, pressed) {
 
 function loop() {
   if (!S.playing) return;
-  drawAt(video.currentTime);
-  $("scrub").value = Math.round((video.currentTime / S.duration) * 1000) || 0;
-  $("tlabel").textContent = fmt(video.currentTime);
-  if (video.ended) {
+  const t = video.currentTime;
+  drawAt(t);
+  $("scrub").value = Math.round((t / S.duration) * 1000) || 0;
+  $("tlabel").textContent = fmt(t);
+  updatePlayhead(t);
+  if (video.ended || (S.trimEnd != null && t >= S.trimEnd)) {
     stopPlayback();
     return;
   }
@@ -650,6 +659,10 @@ function loop() {
 
 async function startPlayback() {
   if (S.audioCtx && S.audioCtx.state === "suspended") await S.audioCtx.resume();
+  // Reproduce dentro del recorte.
+  const a = S.trimStart || 0;
+  const b = S.trimEnd != null ? S.trimEnd : S.duration;
+  if (video.currentTime < a || video.currentTime >= b - 0.02) video.currentTime = a;
   S.playing = true;
   $("playBtn").textContent = "❚❚";
   video.play();
@@ -670,22 +683,47 @@ function buildTimeline() {
   list.innerHTML = "";
   if (!S.duration) return;
 
+  const pct = (t) => `${(t / S.duration) * 100}%`;
+  const ts = S.trimStart || 0;
+  const te = S.trimEnd != null ? S.trimEnd : S.duration;
+
+  // Zonas recortadas (atenuadas).
+  if (ts > 0) {
+    const d = document.createElement("div");
+    d.className = "dim";
+    d.style.left = "0";
+    d.style.width = pct(ts);
+    tl.appendChild(d);
+  }
+  if (te < S.duration) {
+    const d = document.createElement("div");
+    d.className = "dim";
+    d.style.left = pct(te);
+    d.style.right = "0";
+    tl.appendChild(d);
+  }
+
   for (const c of S.clicks) {
     const tick = document.createElement("div");
     tick.className = "tick";
-    tick.style.left = `${(c.t / S.duration) * 100}%`;
+    tick.style.left = pct(c.t);
     tl.appendChild(tick);
   }
 
   S.segments.forEach((seg, i) => {
+    // Usa la duración PROPIA del zoom para que la barra refleje los cambios.
+    const segHold = seg.hold != null ? seg.hold : S.settings.hold;
     const start = Math.max(0, seg.start - LEAD);
-    const end = Math.min(S.duration, seg.end + S.settings.hold);
+    const end = Math.min(S.duration, seg.end + segHold);
     if (seg.enabled) {
+      const dur = (end - start).toFixed(1);
       const zone = document.createElement("div");
-      zone.className = "zone";
+      zone.className = "zone" + (seg.id === S.selectedSegId ? " sel" : "");
       zone.style.left = `${(start / S.duration) * 100}%`;
-      zone.style.width = `${Math.max(1.5, ((end - start) / S.duration) * 100)}%`;
-      zone.title = `Zoom ${i + 1}`;
+      zone.style.width = `${Math.max(2, ((end - start) / S.duration) * 100)}%`;
+      zone.title = `Zoom ${i + 1} · ${dur}s — clic para editar`;
+      zone.innerHTML = `<span class="zlabel">${i + 1} · ${dur}s</span>`;
+      zone.onclick = () => selectSegment(seg.id);
       tl.appendChild(zone);
     }
 
@@ -701,8 +739,38 @@ function buildTimeline() {
     list.appendChild(chip);
   });
 
+  // Manijas de recorte (inicio / fin).
+  const hL = document.createElement("div");
+  hL.className = "handle l";
+  hL.style.left = pct(ts);
+  hL.title = "Recortar inicio";
+  hL.onmousedown = (e) => { S.trimDrag = "start"; e.preventDefault(); };
+  tl.appendChild(hL);
+
+  const hR = document.createElement("div");
+  hR.className = "handle r";
+  hR.style.left = pct(te);
+  hR.title = "Recortar fin";
+  hR.onmousedown = (e) => { S.trimDrag = "end"; e.preventDefault(); };
+  tl.appendChild(hR);
+
+  // Cursor de reproducción.
+  const ph = document.createElement("div");
+  ph.className = "playhead";
+  ph.id = "playhead";
+  ph.style.left = pct(Math.min(video.currentTime || 0, S.duration));
+  tl.appendChild(ph);
+
   const active = S.segments.filter((s) => s.enabled).length;
-  $("clickCount").textContent = `${S.clicks.length} clicks · ${active} zoom${active === 1 ? "" : "s"}`;
+  const trimmed = te - ts;
+  const trimNote = trimmed < S.duration - 0.05 ? ` · recorte ${fmt(trimmed)}` : "";
+  $("clickCount").textContent =
+    `${S.clicks.length} clicks · ${active} zoom${active === 1 ? "" : "s"}${trimNote}`;
+}
+
+function updatePlayhead(t) {
+  const ph = document.getElementById("playhead");
+  if (ph && S.duration) ph.style.left = `${(t / S.duration) * 100}%`;
 }
 
 function selectedSeg() {
@@ -804,6 +872,17 @@ function setupDrag() {
     e.preventDefault();
   });
   window.addEventListener("mousemove", (e) => {
+    if (S.trimDrag) {
+      const rect = $("timeline").getBoundingClientRect();
+      const t = clamp01((e.clientX - rect.left) / rect.width) * S.duration;
+      if (S.trimDrag === "start") S.trimStart = Math.min(t, (S.trimEnd ?? S.duration) - 0.3);
+      else S.trimEnd = Math.max(t, (S.trimStart || 0) + 0.3);
+      video.currentTime = t;
+      drawAt(t);
+      $("tlabel").textContent = fmt(t);
+      buildTimeline();
+      return;
+    }
     if (!S.drag) return;
     const seg = selectedSeg();
     if (!seg) return;
@@ -825,6 +904,10 @@ function setupDrag() {
     drawAt(video.currentTime);
   });
   window.addEventListener("mouseup", () => {
+    if (S.trimDrag) {
+      S.trimDrag = null;
+      return;
+    }
     if (S.drag) {
       S.drag = null;
       $("preview").style.cursor = selectedSeg() ? "grab" : "default";
@@ -884,14 +967,17 @@ async function exportVideo() {
   const done = new Promise((res) => (rec.onstop = res));
   rec.start();
 
-  video.currentTime = 0;
+  const start = S.trimStart || 0;
+  const end = S.trimEnd != null ? S.trimEnd : S.duration;
+  const span = Math.max(0.1, end - start);
+  video.currentTime = start;
   await video.play().catch(() => {});
 
   await new Promise((resolve) => {
     const step = () => {
       drawAt(video.currentTime);
-      setProgress(Math.min(99, (video.currentTime / S.duration) * 100));
-      if (video.ended || video.currentTime >= S.duration - 0.05) {
+      setProgress(Math.min(99, ((video.currentTime - start) / span) * 100));
+      if (video.ended || video.currentTime >= end - 0.05) {
         resolve();
         return;
       }
@@ -990,6 +1076,7 @@ function bindControls() {
     video.currentTime = t;
     drawAt(t);
     $("tlabel").textContent = fmt(t);
+    updatePlayhead(t);
   };
 
   const link = (id, fn) =>
@@ -1106,7 +1193,7 @@ function bindControls() {
     }
   });
 
-  $("stopHint").textContent = isMac ? "⌘⇧2" : "Ctrl+Shift+2";
+  $("stopHint").textContent = isMac ? "⌘5" : "Ctrl+5";
 }
 
 document.body.classList.toggle("mac", isMac);

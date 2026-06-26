@@ -40,7 +40,7 @@ try {
   console.error("[main] No se pudo cargar uiohook-napi:", e.message);
 }
 
-const STOP_SHORTCUT = "CommandOrControl+Shift+2";
+const STOP_SHORTCUT = "CommandOrControl+5";
 
 let tracking = false;
 let lastMove = 0;
