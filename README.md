@@ -1,4 +1,4 @@
-# ScreenStudio 🎥
+# PragmaScreenStudio 🎥
 
 App de escritorio (Electron) para **grabar tu pantalla con zoom automático hacia donde haces click**, resaltar los clicks, grabar **voz en off** y exportar el video desde un **editor** integrado. Pensada para crear demos de software de forma rápida y profesional — estilo *Screen Studio*.
 

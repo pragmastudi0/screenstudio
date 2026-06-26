@@ -1,8 +1,8 @@
 {
-  "name": "screenstudio",
+  "name": "pragmascreenstudio",
   "version": "0.1.0",
   "private": true,
-  "description": "ScreenStudio — Grabador de pantalla con zoom automático al hacer click, voz en off y editor de video.",
+  "description": "PragmaScreenStudio — Grabador de pantalla con zoom automático al hacer click, voz en off y editor de video.",
   "main": "electron/main.js",
   "author": "ScreenStudio",
   "scripts": {
@@ -20,8 +20,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.screenstudio.app",
-    "productName": "ScreenStudio",
+    "appId": "com.pragma.screenstudio",
+    "productName": "PragmaScreenStudio",
     "files": ["electron/**/*", "src/**/*", "package.json"],
     "mac": {
       "category": "public.app-category.video",

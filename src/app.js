@@ -66,7 +66,10 @@ async function loadSources() {
   for (const s of sources) {
     const el = document.createElement("div");
     el.className = "src";
-    el.innerHTML = `<img src="${s.thumbnail}" alt=""><div class="cap">${s.isScreen ? "🖥️ " : "🪟 "}${s.name}</div>`;
+    const icon = s.icon
+      ? `<img class="ico" src="${s.icon}" alt="">`
+      : `<span class="ico-emoji">${s.isScreen ? "🖥️" : "🪟"}</span>`;
+    el.innerHTML = `<img class="thumb" src="${s.thumbnail}" alt=""><div class="cap">${icon}<span class="cap-txt">${s.name}</span></div>`;
     el.onclick = () => {
       document.querySelectorAll(".src").forEach((x) => x.classList.remove("sel"));
       el.classList.add("sel");
@@ -491,7 +494,7 @@ async function exportVideo() {
   const buffer = await blob.arrayBuffer();
   const r = await window.studio.saveVideo({
     buffer: new Uint8Array(buffer),
-    suggested: `screenstudio-${Date.now()}.${ext}`,
+    suggested: `pragmascreenstudio-${Date.now()}.${ext}`,
   });
 
   $("expPct").textContent = "100%";
@@ -621,5 +624,6 @@ function bindControls() {
   $("stopHint").textContent = isMac ? "⌘⇧2" : "Ctrl+Shift+2";
 }
 
+document.body.classList.toggle("mac", isMac);
 bindControls();
 loadSources();

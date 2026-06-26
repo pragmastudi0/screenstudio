@@ -32,13 +32,22 @@ const STOP_SHORTCUT = "CommandOrControl+Shift+2";
 
 let tracking = false;
 let lastMove = 0;
-let physical = { w: 1920, h: 1080 };
+// bounds lógicos (puntos) de la pantalla primaria; sirven para normalizar la
+// posición del cursor a 0..1 sin importar el factor Retina.
+let bounds = { x: 0, y: 0, width: 1920, height: 1080 };
 
 function refreshDisplayMetrics() {
-  const d = screen.getPrimaryDisplay();
-  physical = {
-    w: d.size.width * d.scaleFactor,
-    h: d.size.height * d.scaleFactor,
+  bounds = screen.getPrimaryDisplay().bounds;
+}
+
+// Posición del cursor (0..1) usando la API de Electron, que devuelve puntos
+// lógicos consistentes (evita la ambigüedad de coordenadas de uiohook).
+function cursorNorm() {
+  const p = screen.getCursorScreenPoint();
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  return {
+    nx: clamp((p.x - bounds.x) / bounds.width),
+    ny: clamp((p.y - bounds.y) / bounds.height),
   };
 }
 
@@ -63,30 +72,21 @@ function createWindow() {
 // ── Hook global del mouse (solo clicks) ──
 function setupMouseHook() {
   if (!uIOhook) return;
-  const clamp = (v) => Math.max(0, Math.min(1, v));
 
-  uIOhook.on("mousedown", (e) => {
+  uIOhook.on("mousedown", () => {
     if (!tracking || !mainWindow) return;
-    mainWindow.webContents.send("mouse-event", {
-      type: "down",
-      nx: clamp(e.x / physical.w),
-      ny: clamp(e.y / physical.h),
-      t: Date.now(),
-    });
+    const { nx, ny } = cursorNorm();
+    mainWindow.webContents.send("mouse-event", { type: "down", nx, ny, t: Date.now() });
   });
 
   // Movimiento del cursor (para dibujar el cursor "manito" en el editor).
-  uIOhook.on("mousemove", (e) => {
+  uIOhook.on("mousemove", () => {
     if (!tracking || !mainWindow) return;
     const now = Date.now();
     if (now - lastMove < 33) return; // ~30 fps
     lastMove = now;
-    mainWindow.webContents.send("mouse-event", {
-      type: "move",
-      nx: clamp(e.x / physical.w),
-      ny: clamp(e.y / physical.h),
-      t: now,
-    });
+    const { nx, ny } = cursorNorm();
+    mainWindow.webContents.send("mouse-event", { type: "move", nx, ny, t: now });
   });
 
   try {
@@ -101,12 +101,13 @@ ipcMain.handle("get-sources", async () => {
   const sources = await desktopCapturer.getSources({
     types: ["screen", "window"],
     thumbnailSize: { width: 320, height: 200 },
-    fetchWindowIcons: false,
+    fetchWindowIcons: true,
   });
   return sources.map((s) => ({
     id: s.id,
     name: s.name,
     thumbnail: s.thumbnail.toDataURL(),
+    icon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : null,
     isScreen: s.id.startsWith("screen"),
   }));
 });
