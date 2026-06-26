@@ -746,7 +746,10 @@ function updateSegPanel() {
   panel.style.display = "";
   const idx = S.segments.indexOf(seg) + 1;
   const hold = seg.hold != null ? seg.hold : S.settings.hold;
+  const zoom = seg.zoom != null ? seg.zoom : S.settings.zoom;
   $("segTitle").textContent = `#${idx}`;
+  $("segZoom").value = Math.round(zoom * 100);
+  $("segZoomVal").textContent = `${zoom.toFixed(1)}×`;
   $("segHold").value = Math.round(hold * 100);
   $("segHoldVal").textContent = `${hold.toFixed(1)}s`;
   $("segToggle").textContent = seg.enabled ? "Desactivar" : "Activar";
@@ -809,8 +812,9 @@ function setupDrag() {
     const sx = canvas.width / rect.width;
     const sy = canvas.height / rect.height;
     const { iw, ih } = innerDims();
-    const dw = iw * S.settings.zoom;
-    const dh = ih * S.settings.zoom;
+    const z = seg.zoom != null ? seg.zoom : S.settings.zoom;
+    const dw = iw * z;
+    const dh = ih * z;
     const dxpix = (e.clientX - S.drag.startX) * sx;
     const dypix = (e.clientY - S.drag.startY) * sy;
     seg.focus = {
@@ -1040,7 +1044,15 @@ function bindControls() {
   buildSwatches("subColors", ["#ffffff", "#facc15", "#22d3ee", "#a78bfa", "#000000"],
     () => S.settings.subColor, (c) => (S.settings.subColor = c));
 
-  // Per-zoom: duración, activar/desactivar y eliminar.
+  // Per-zoom: intensidad, duración, activar/desactivar y eliminar.
+  $("segZoom").oninput = (e) => {
+    const seg = selectedSeg();
+    if (!seg) return;
+    seg.zoom = +e.target.value / 100;
+    $("segZoomVal").textContent = `${seg.zoom.toFixed(1)}×`;
+    recomputeZoom();
+    if (!S.playing) drawAt(video.currentTime);
+  };
   $("segHold").oninput = (e) => {
     const seg = selectedSeg();
     if (!seg) return;

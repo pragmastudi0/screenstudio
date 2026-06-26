@@ -112,7 +112,9 @@
         <div class="grp seg" id="segPanel" style="display:none">
           <label class="ctl">Zoom seleccionado <b id="segTitle"></b></label>
           <p class="hint" style="margin:-2px 0 8px">🖐 Arrastra la imagen del preview para reencuadrar este zoom.</p>
-          <label class="ctl">Duración de este zoom <b id="segHoldVal">1.8s</b></label>
+          <label class="ctl">Intensidad de este zoom <b id="segZoomVal">2.0×</b></label>
+          <input id="segZoom" type="range" min="120" max="350" value="200" />
+          <label class="ctl" style="margin-top:10px">Duración de este zoom <b id="segHoldVal">1.8s</b></label>
           <input id="segHold" type="range" min="40" max="500" value="180" />
           <div class="row gap" style="margin-top:8px">
             <button id="segToggle" class="btn ghost sm">Desactivar</button>
