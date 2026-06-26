@@ -16,6 +16,18 @@ const {
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
+const { spawn } = require("child_process");
+
+// ffmpeg embebido (para exportar MP4/MOV reales, compatibles con WhatsApp).
+let ffmpegPath = null;
+try {
+  ffmpegPath = require("ffmpeg-static");
+  // En la app empaquetada el binario está fuera del asar.
+  if (ffmpegPath) ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
+} catch (e) {
+  console.error("[main] ffmpeg-static no disponible:", e.message);
+}
 
 let mainWindow = null;
 
@@ -139,20 +151,101 @@ ipcMain.on("stop-capture", () => {
   }
 });
 
-ipcMain.handle("save-video", async (_e, { buffer, suggested }) => {
-  const ext = (suggested || "screenstudio.webm").split(".").pop().toLowerCase();
+// Convierte un WebM a MP4/MOV (H.264 + AAC, +faststart) con ffmpeg.
+function transcode(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    if (!ffmpegPath) return reject(new Error("ffmpeg no disponible"));
+    const args = [
+      "-y",
+      "-i", inputPath,
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-pix_fmt", "yuv420p",
+      "-crf", "20",
+      "-c:a", "aac",
+      "-b:a", "160k",
+      "-movflags", "+faststart",
+      outputPath,
+    ];
+    const proc = spawn(ffmpegPath, args);
+    let err = "";
+    proc.stderr.on("data", (d) => (err += d.toString()));
+    proc.on("error", reject);
+    proc.on("close", (code) =>
+      code === 0 ? resolve() : reject(new Error("ffmpeg falló: " + err.slice(-400))),
+    );
+  });
+}
+
+// format: "webm" (directo) | "mp4" | "mov" (transcodifica con ffmpeg).
+ipcMain.handle("save-video", async (_e, { buffer, suggested, format }) => {
+  const fmt = format || "webm";
   const filters =
-    ext === "mp4"
+    fmt === "mp4"
       ? [{ name: "Video MP4", extensions: ["mp4"] }]
-      : [{ name: "Video WebM", extensions: ["webm"] }];
+      : fmt === "mov"
+        ? [{ name: "Video MOV", extensions: ["mov"] }]
+        : [{ name: "Video WebM", extensions: ["webm"] }];
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
     title: "Guardar video",
-    defaultPath: suggested || "screenstudio.webm",
+    defaultPath: suggested || `screenstudio.${fmt}`,
     filters,
   });
   if (canceled || !filePath) return { saved: false };
-  fs.writeFileSync(filePath, Buffer.from(buffer));
-  return { saved: true, path: filePath };
+
+  if (fmt === "webm") {
+    fs.writeFileSync(filePath, Buffer.from(buffer));
+    return { saved: true, path: filePath };
+  }
+
+  // Escribe el WebM temporal y transcodifica al destino MP4/MOV.
+  const tmp = path.join(os.tmpdir(), `pss-${Date.now()}.webm`);
+  try {
+    fs.writeFileSync(tmp, Buffer.from(buffer));
+    await transcode(tmp, filePath);
+    return { saved: true, path: filePath };
+  } catch (e) {
+    return { saved: false, error: e.message };
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+});
+
+// ── Proyectos (.pss + .webm) para seguir editando luego ──
+ipcMain.handle("save-project", async (_e, { state, video, suggested }) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: "Guardar proyecto",
+    defaultPath: suggested || "proyecto.pss",
+    filters: [{ name: "Proyecto PragmaScreenStudio", extensions: ["pss"] }],
+  });
+  if (canceled || !filePath) return { saved: false };
+  const base = filePath.replace(/\.pss$/i, "");
+  const videoFile = path.basename(base) + ".webm";
+  try {
+    fs.writeFileSync(base + ".webm", Buffer.from(video));
+    fs.writeFileSync(filePath, JSON.stringify({ ...state, videoFile }, null, 0));
+    return { saved: true, path: filePath };
+  } catch (e) {
+    return { saved: false, error: e.message };
+  }
+});
+
+ipcMain.handle("open-project", async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: "Abrir proyecto",
+    properties: ["openFile"],
+    filters: [{ name: "Proyecto PragmaScreenStudio", extensions: ["pss"] }],
+  });
+  if (canceled || !filePaths[0]) return { opened: false };
+  try {
+    const state = JSON.parse(fs.readFileSync(filePaths[0], "utf8"));
+    const dir = path.dirname(filePaths[0]);
+    const videoPath = path.join(dir, state.videoFile);
+    const video = fs.readFileSync(videoPath);
+    return { opened: true, state, video };
+  } catch (e) {
+    return { opened: false, error: e.message };
+  }
 });
 
 app.whenReady().then(() => {

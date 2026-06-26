@@ -40,8 +40,9 @@
 
     <div id="permWarn" class="warn hidden"></div>
 
-    <div class="actions">
+    <div class="actions row gap">
       <button id="startBtn" class="btn primary lg" disabled>● Empezar a grabar</button>
+      <button id="openProject" class="btn ghost lg">📂 Abrir proyecto</button>
     </div>
   </section>
 
@@ -70,6 +71,7 @@
       </div>
       <div class="row gap">
         <button id="newRec" class="btn ghost">Nueva grabación</button>
+        <button id="saveProject" class="btn ghost">💾 Guardar proyecto</button>
         <button id="exportBtn" class="btn primary">⤓ Exportar video</button>
       </div>
     </header>
@@ -104,8 +106,17 @@
           <input id="zoomRange" type="range" min="120" max="320" value="200" />
         </div>
         <div class="grp">
-          <label class="ctl">Duración del zoom <b id="holdVal">1.8s</b></label>
-          <input id="holdRange" type="range" min="60" max="400" value="180" />
+          <label class="ctl">Duración por defecto <b id="holdVal">1.8s</b></label>
+          <input id="holdRange" type="range" min="40" max="400" value="180" />
+        </div>
+        <div class="grp seg" id="segPanel" style="display:none">
+          <label class="ctl">Zoom seleccionado <b id="segTitle"></b></label>
+          <label class="ctl">Duración de este zoom <b id="segHoldVal">1.8s</b></label>
+          <input id="segHold" type="range" min="40" max="500" value="180" />
+          <div class="row gap" style="margin-top:8px">
+            <button id="segToggle" class="btn ghost sm">Desactivar</button>
+            <button id="segDelete" class="btn ghost sm">Eliminar</button>
+          </div>
         </div>
         <div class="grp">
           <label class="opt"><input type="checkbox" id="edClickFx" checked /><span>Resaltar clicks</span></label>
@@ -133,9 +144,48 @@
         </div>
         <hr/>
         <div class="grp">
+          <label class="opt"><input type="checkbox" id="subsOn" /><span>Subtítulos (estilo CapCut)</span></label>
+        </div>
+        <div id="subsControls" style="display:none">
+          <div class="grp">
+            <textarea id="subsText" class="field" rows="3" placeholder="Pega aquí tu guion o narración…"></textarea>
+            <button id="subsGen" class="btn ghost sm" style="margin-top:8px;width:100%">✨ Generar subtítulos</button>
+          </div>
+          <div class="grp">
+            <label class="ctl">Estilo</label>
+            <select id="subStyle" class="sel">
+              <option value="classic">Clásico (caja negra)</option>
+              <option value="outline">Contorno</option>
+              <option value="highlight">Resaltado (CapCut)</option>
+              <option value="bold">Negrita grande</option>
+            </select>
+          </div>
+          <div class="grp">
+            <label class="ctl">Tamaño <b id="subSizeVal">5%</b></label>
+            <input id="subSize" type="range" min="3" max="12" value="5" />
+          </div>
+          <div class="grp">
+            <label class="ctl">Posición</label>
+            <select id="subPos" class="sel">
+              <option value="bottom">Abajo</option>
+              <option value="middle">Centro</option>
+              <option value="top">Arriba</option>
+            </select>
+          </div>
+          <div class="grp">
+            <label class="ctl">Color del texto</label>
+            <div class="swatches" id="subColors"></div>
+          </div>
+          <div class="grp">
+            <div class="subslist" id="subsList"></div>
+          </div>
+        </div>
+        <hr/>
+        <div class="grp">
           <label class="ctl">Formato de exportación</label>
           <select id="exportFmt" class="sel">
-            <option value="mp4">MP4 (WhatsApp, redes) ✓</option>
+            <option value="mp4">MP4 · H.264 (WhatsApp, redes) ✓</option>
+            <option value="mov">MOV · H.264 (Apple/WhatsApp)</option>
             <option value="webm">WebM</option>
           </select>
         </div>
@@ -147,10 +197,15 @@
   </section>
 
   <div id="exporting" class="overlay hidden">
-    <div class="spinner"></div>
-    <p id="expLabel">Exportando video… <b id="expPct">0%</b></p>
-    <p class="hint">Se renderiza en tiempo real; tardará lo que dure el video.</p>
+    <div class="expcard">
+      <div class="spinner"></div>
+      <p id="expLabel" class="explabel">Renderizando video…</p>
+      <div class="progress"><div id="expBar" class="bar"></div></div>
+      <p class="hint"><b id="expPct">0%</b> · <span id="expSub">se renderiza en tiempo real</span></p>
+    </div>
   </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script type="module" src="app.js"></script>
 </body>

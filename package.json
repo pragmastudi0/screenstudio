@@ -13,6 +13,7 @@
     "dist:win": "electron-builder --win"
   },
   "dependencies": {
+    "ffmpeg-static": "^5.2.0",
     "uiohook-napi": "^1.5.4"
   },
   "devDependencies": {
@@ -23,6 +24,7 @@
     "appId": "com.pragma.screenstudio",
     "productName": "PragmaScreenStudio",
     "files": ["electron/**/*", "src/**/*", "package.json"],
+    "asarUnpack": ["node_modules/ffmpeg-static/**", "node_modules/uiohook-napi/**"],
     "mac": {
       "category": "public.app-category.video",
       "target": ["dmg"],

@@ -131,6 +131,28 @@ button, input, label { -webkit-app-region: no-drag; }
 .spinner { width: 42px; height: 42px; border: 3px solid #2a2a31; border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.expcard { display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px 36px; min-width: 320px; }
+.explabel { font-weight: 600; margin: 0; }
+.progress { width: 280px; height: 8px; background: #18181b; border-radius: 6px; overflow: hidden; }
+.bar { height: 100%; width: 0%; background: linear-gradient(90deg,#8b5cf6,#e879f9); transition: width .2s; }
+
+.seg { background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.35); border-radius: 10px; padding: 12px; }
+.chip.sel { border-color: var(--primary); background: #241b3a; color: #fff; }
+
+.subslist { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.subrow { display: flex; align-items: center; gap: 6px; }
+.subrow .tm { font-size: 11px; color: #71717a; font-variant-numeric: tabular-nums; min-width: 34px; }
+.subrow input { flex: 1; background: var(--bg); border: 1px solid var(--line2); border-radius: 6px; color: var(--txt); padding: 5px 7px; font-size: 12px; }
+.subrow .x { cursor: pointer; color: #f87171; padding: 0 4px; }
+
+.toast {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+  background: #18181b; border: 1px solid var(--line2); color: var(--txt);
+  padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 60;
+  max-width: 80vw; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.toast.ok { background: #052e16; border-color: #166534; color: #bbf7d0; }
+
 .count-num {
   font-size: 120px; font-weight: 800; line-height: 1; color: #fff;
   animation: pop .9s ease-out infinite; font-variant-numeric: tabular-nums;

@@ -65,11 +65,12 @@ export function segmentsToKeyframes(segments, opts = {}) {
     const c = seg.clicks;
     const first = c[0];
     const last = c[c.length - 1];
+    const segHold = seg.hold != null ? seg.hold : hold; // duración propia o global
     kfs.push({ t: Math.max(0, first.t - lead), scale: 1, x: first.x, y: first.y });
     kfs.push({ t: first.t, scale: zoom, x: first.x, y: first.y });
     for (let i = 1; i < c.length; i++) kfs.push({ t: c[i].t, scale: zoom, x: c[i].x, y: c[i].y });
-    kfs.push({ t: last.t + hold, scale: zoom, x: last.x, y: last.y });
-    kfs.push({ t: last.t + hold + ease, scale: 1, x: last.x, y: last.y });
+    kfs.push({ t: last.t + segHold, scale: zoom, x: last.x, y: last.y });
+    kfs.push({ t: last.t + segHold + ease, scale: 1, x: last.x, y: last.y });
   }
   kfs.sort((a, b) => a.t - b.t);
   return kfs;

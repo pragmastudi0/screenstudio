@@ -23,6 +23,8 @@ const S = {
   clicks: [], // {t, x, y}
   moves: [], // {t, x, y}
   segments: [], // zooms editables
+  selectedSegId: null,
+  subs: [], // {start, end, text}
   blobUrl: null,
   duration: 0,
 
@@ -37,6 +39,11 @@ const S = {
     radius: 14,
     bg: "#111114",
     exportFmt: "mp4",
+    subsOn: false,
+    subStyle: "highlight",
+    subSize: 0.05,
+    subPos: "bottom",
+    subColor: "#ffffff",
   },
   keyframes: [],
 
@@ -93,22 +100,6 @@ async function loadSources() {
 function pickRecordMime() {
   const opts = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
   return opts.find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
-}
-
-function pickExportMime(fmt) {
-  if (fmt === "mp4") {
-    const cands = [
-      "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-      "video/mp4;codecs=h264,aac",
-      "video/mp4",
-    ];
-    const m = cands.find((c) => MediaRecorder.isTypeSupported(c));
-    if (m) return { mime: m, ext: "mp4" };
-  }
-  const webm = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(
-    (c) => MediaRecorder.isTypeSupported(c),
-  ) || "video/webm";
-  return { mime: webm, ext: "webm" };
 }
 
 async function startRecording() {
@@ -207,13 +198,19 @@ function stopRecording() {
 }
 
 async function onRecordingStopped() {
-  const blob = new Blob(S.chunks, { type: "video/webm" });
+  S.recordedBlob = new Blob(S.chunks, { type: "video/webm" });
+  await loadVideoBlob(S.recordedBlob);
+  S.segments = buildSegments(S.clicks, SENSITIVITY[S.settings.sensitivity]);
+  S.subs = [];
+  enterEditor();
+}
+
+async function loadVideoBlob(blob) {
   if (S.blobUrl) URL.revokeObjectURL(S.blobUrl);
   S.blobUrl = URL.createObjectURL(blob);
   video.src = S.blobUrl;
   await once(video, "loadedmetadata");
   S.duration = await resolveDuration(video);
-
   const canvas = $("preview");
   let ow = video.videoWidth || 1280;
   let oh = video.videoHeight || 720;
@@ -223,16 +220,164 @@ async function onRecordingStopped() {
   }
   canvas.width = ow;
   canvas.height = oh;
+}
 
-  S.segments = buildSegments(S.clicks, SENSITIVITY[S.settings.sensitivity]);
+function enterEditor() {
   ensureAudioGraph();
+  S.selectedSegId = null;
+  $("scrub").value = 0;
   recomputeZoom();
   buildTimeline();
-  $("scrub").value = 0;
-
+  renderSubsList();
+  applySettingsToUI();
+  updateSegPanel();
+  hide("view-setup");
   hide("view-recording");
   show("view-editor");
   drawAt(0);
+}
+
+// Vuelca S.settings a los controles (útil al abrir un proyecto guardado).
+function applySettingsToUI() {
+  const s = S.settings;
+  $("edAutozoom").checked = s.autozoom;
+  $("sensitivity").value = s.sensitivity;
+  $("zoomRange").value = Math.round(s.zoom * 100);
+  $("zoomVal").textContent = `${s.zoom.toFixed(1)}×`;
+  $("holdRange").value = Math.round(s.hold * 100);
+  $("holdVal").textContent = `${s.hold.toFixed(1)}s`;
+  $("edClickFx").checked = s.clickFx;
+  $("cursorStyle").value = s.cursor;
+  $("padRange").value = Math.round(s.padding * 100);
+  $("padVal").textContent = `${Math.round(s.padding * 100)}%`;
+  $("radRange").value = s.radius;
+  $("radVal").textContent = `${s.radius}px`;
+  $("exportFmt").value = s.exportFmt;
+  $("subsOn").checked = s.subsOn;
+  $("subsControls").style.display = s.subsOn ? "" : "none";
+  $("subStyle").value = s.subStyle;
+  $("subSize").value = Math.round(s.subSize * 100);
+  $("subSizeVal").textContent = `${Math.round(s.subSize * 100)}%`;
+  $("subPos").value = s.subPos;
+  document.querySelectorAll("#swatches .sw").forEach((el) =>
+    el.classList.toggle("sel", el.dataset.c === s.bg),
+  );
+  document.querySelectorAll("#subColors .sw").forEach((el) =>
+    el.classList.toggle("sel", el.dataset.c === s.subColor),
+  );
+}
+
+// ── Subtítulos ──
+function generateSubtitles() {
+  const text = $("subsText").value.trim();
+  if (!text || !S.duration) {
+    showToast("Escribe el guion y graba primero.");
+    return;
+  }
+  const words = text.replace(/\s+/g, " ").split(" ");
+  const chunks = [];
+  let cur = [];
+  for (const w of words) {
+    cur.push(w);
+    const endsSentence = /[.!?…]$/.test(w);
+    if (cur.length >= 8 || (endsSentence && cur.length >= 4)) {
+      chunks.push(cur.join(" "));
+      cur = [];
+    }
+  }
+  if (cur.length) chunks.push(cur.join(" "));
+
+  const totalWords = chunks.reduce((a, c) => a + c.split(" ").length, 0) || 1;
+  let t = 0;
+  S.subs = chunks.map((c) => {
+    const dur = (c.split(" ").length / totalWords) * S.duration;
+    const cue = { start: t, end: Math.min(S.duration, t + dur), text: c };
+    t += dur;
+    return cue;
+  });
+  renderSubsList();
+  if (!S.playing) drawAt(video.currentTime);
+}
+
+function renderSubsList() {
+  const box = $("subsList");
+  if (!box) return;
+  box.innerHTML = "";
+  S.subs.forEach((cue, i) => {
+    const row = document.createElement("div");
+    row.className = "subrow";
+    const input = document.createElement("input");
+    input.value = cue.text;
+    input.oninput = (e) => {
+      cue.text = e.target.value;
+      if (!S.playing) drawAt(video.currentTime);
+    };
+    const tm = document.createElement("span");
+    tm.className = "tm";
+    tm.textContent = fmt(cue.start);
+    const x = document.createElement("span");
+    x.className = "x";
+    x.textContent = "✕";
+    x.onclick = () => {
+      S.subs.splice(i, 1);
+      renderSubsList();
+      if (!S.playing) drawAt(video.currentTime);
+    };
+    row.append(tm, input, x);
+    box.appendChild(row);
+  });
+}
+
+// ── Proyectos (.pss) ──
+async function saveProjectFn() {
+  if (!S.recordedBlob) {
+    showToast("No hay grabación para guardar.");
+    return;
+  }
+  const state = {
+    version: 1,
+    duration: S.duration,
+    clicks: S.clicks,
+    moves: S.moves,
+    segments: S.segments,
+    subs: S.subs,
+    settings: S.settings,
+  };
+  const buf = new Uint8Array(await S.recordedBlob.arrayBuffer());
+  const r = await window.studio.saveProject({
+    state,
+    video: buf,
+    suggested: `proyecto-${Date.now()}.pss`,
+  });
+  if (r.saved) showToast("Proyecto guardado ✓", true);
+  else if (r.error) showToast(`No se pudo guardar: ${r.error}`);
+}
+
+async function openProjectFn() {
+  const r = await window.studio.openProject();
+  if (!r.opened) {
+    if (r.error) showToast(`No se pudo abrir: ${r.error}`);
+    return;
+  }
+  const st = r.state;
+  S.clicks = st.clicks || [];
+  S.moves = st.moves || [];
+  S.segments = st.segments || [];
+  S.subs = st.subs || [];
+  S.settings = Object.assign(S.settings, st.settings || {});
+  S.recordedBlob = new Blob([new Uint8Array(r.video)], { type: "video/webm" });
+  await loadVideoBlob(S.recordedBlob);
+  S.duration = st.duration || S.duration;
+  enterEditor();
+  showToast("Proyecto cargado ✓", true);
+}
+
+function showToast(msg, ok) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast" + (ok ? " ok" : "");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.add("hidden"), 3600);
 }
 
 // ───────────────────────── Editor / render ─────────────────────────
@@ -309,6 +454,78 @@ function drawAt(t) {
       drawCursor(ctx, px, py, Math.min(W, H), cfg.cursor, pressed);
     }
   }
+  ctx.restore();
+
+  // Subtítulos por encima de todo (no recortados por el zoom).
+  if (cfg.subsOn) drawSubtitle(ctx, W, H, t);
+}
+
+function drawSubtitle(ctx, W, H, t) {
+  const cue = S.subs.find((s) => t >= s.start && t < s.end);
+  if (!cue || !cue.text.trim()) return;
+  const cfg = S.settings;
+  const fontSize = Math.round(H * cfg.subSize);
+  ctx.save();
+  ctx.font = `700 ${fontSize}px -apple-system,"Segoe UI",Roboto,sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+
+  // Ajuste de líneas al 80% del ancho.
+  const maxW = W * 0.8;
+  const words = cue.text.trim().split(/\s+/);
+  const lines = [];
+  let line = "";
+  for (const w of words) {
+    const test = line ? line + " " + w : w;
+    if (ctx.measureText(test).width > maxW && line) {
+      lines.push(line);
+      line = w;
+    } else line = test;
+  }
+  if (line) lines.push(line);
+
+  const lh = fontSize * 1.25;
+  const blockH = lines.length * lh;
+  let topY;
+  if (cfg.subPos === "top") topY = H * 0.08;
+  else if (cfg.subPos === "middle") topY = (H - blockH) / 2;
+  else topY = H - blockH - H * 0.07;
+
+  lines.forEach((ln, i) => {
+    const cx = W / 2;
+    const baseY = topY + i * lh + fontSize;
+    const tw = ctx.measureText(ln).width;
+    const padX = fontSize * 0.4;
+    const padY = fontSize * 0.18;
+
+    if (cfg.subStyle === "classic") {
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      roundRect(ctx, cx - tw / 2 - padX, baseY - fontSize - padY, tw + padX * 2, lh, fontSize * 0.18);
+      ctx.fill();
+      ctx.fillStyle = cfg.subColor;
+      ctx.fillText(ln, cx, baseY);
+    } else if (cfg.subStyle === "highlight") {
+      ctx.fillStyle = "rgba(139,92,246,0.92)";
+      roundRect(ctx, cx - tw / 2 - padX, baseY - fontSize - padY, tw + padX * 2, lh, fontSize * 0.22);
+      ctx.fill();
+      ctx.fillStyle = cfg.subColor;
+      ctx.fillText(ln, cx, baseY);
+    } else if (cfg.subStyle === "outline") {
+      ctx.lineWidth = fontSize * 0.14;
+      ctx.strokeStyle = "rgba(0,0,0,0.9)";
+      ctx.lineJoin = "round";
+      ctx.strokeText(ln, cx, baseY);
+      ctx.fillStyle = cfg.subColor;
+      ctx.fillText(ln, cx, baseY);
+    } else {
+      // bold con sombra
+      ctx.shadowColor = "rgba(0,0,0,0.75)";
+      ctx.shadowBlur = fontSize * 0.3;
+      ctx.shadowOffsetY = fontSize * 0.06;
+      ctx.fillStyle = cfg.subColor;
+      ctx.fillText(ln, cx, baseY);
+    }
+  });
   ctx.restore();
 }
 
@@ -407,20 +624,13 @@ function buildTimeline() {
     }
 
     const chip = document.createElement("div");
-    chip.className = "chip" + (seg.enabled ? "" : " off");
+    chip.className =
+      "chip" + (seg.enabled ? "" : " off") + (seg.id === S.selectedSegId ? " sel" : "");
     chip.innerHTML = `<span><b>Zoom ${i + 1}</b> · ${fmt(seg.start)}</span><span class="x" title="Eliminar">✕</span>`;
-    chip.querySelector("span").onclick = () => {
-      seg.enabled = !seg.enabled;
-      recomputeZoom();
-      buildTimeline();
-      if (!S.playing) drawAt(video.currentTime);
-    };
+    chip.querySelector("span").onclick = () => selectSegment(seg.id);
     chip.querySelector(".x").onclick = (ev) => {
       ev.stopPropagation();
-      S.segments = S.segments.filter((s) => s.id !== seg.id);
-      recomputeZoom();
-      buildTimeline();
-      if (!S.playing) drawAt(video.currentTime);
+      deleteSegment(seg.id);
     };
     list.appendChild(chip);
   });
@@ -429,12 +639,49 @@ function buildTimeline() {
   $("clickCount").textContent = `${S.clicks.length} clicks · ${active} zoom${active === 1 ? "" : "s"}`;
 }
 
+function selectedSeg() {
+  return S.segments.find((s) => s.id === S.selectedSegId) || null;
+}
+
+function selectSegment(id) {
+  S.selectedSegId = id;
+  buildTimeline();
+  updateSegPanel();
+}
+
+function deleteSegment(id) {
+  S.segments = S.segments.filter((s) => s.id !== id);
+  if (S.selectedSegId === id) S.selectedSegId = null;
+  recomputeZoom();
+  buildTimeline();
+  updateSegPanel();
+  if (!S.playing) drawAt(video.currentTime);
+}
+
+function updateSegPanel() {
+  const seg = selectedSeg();
+  const panel = $("segPanel");
+  if (!seg) {
+    panel.style.display = "none";
+    return;
+  }
+  panel.style.display = "";
+  const idx = S.segments.indexOf(seg) + 1;
+  const hold = seg.hold != null ? seg.hold : S.settings.hold;
+  $("segTitle").textContent = `#${idx}`;
+  $("segHold").value = Math.round(hold * 100);
+  $("segHoldVal").textContent = `${hold.toFixed(1)}s`;
+  $("segToggle").textContent = seg.enabled ? "Desactivar" : "Activar";
+}
+
 // Recalcula los zooms desde los clicks con la sensibilidad elegida.
 // (Reinicia ajustes manuales de zooms: añadidos/eliminados.)
 function rebuildSegments() {
   S.segments = buildSegments(S.clicks, SENSITIVITY[S.settings.sensitivity]);
+  S.selectedSegId = null;
   recomputeZoom();
   buildTimeline();
+  updateSegPanel();
   if (!S.playing) drawAt(video.currentTime);
 }
 
@@ -464,22 +711,34 @@ function ensureAudioGraph() {
 }
 
 // ───────────────────────── Exportar ─────────────────────────
+function setProgress(pct, label, sub) {
+  $("expBar").style.width = `${pct}%`;
+  $("expPct").textContent = `${Math.round(pct)}%`;
+  if (label) $("expLabel").textContent = label;
+  if (sub != null) $("expSub").textContent = sub;
+}
+
 async function exportVideo() {
   if (S.exporting) return;
   S.exporting = true;
   stopPlayback();
   show("exporting");
-  $("expPct").textContent = "0%";
+  setProgress(0, "Renderizando video…", "se renderiza en tiempo real");
 
   if (S.audioCtx && S.audioCtx.state === "suspended") await S.audioCtx.resume();
 
-  const { mime, ext } = pickExportMime(S.settings.exportFmt);
-  if (S.settings.exportFmt === "mp4" && ext !== "mp4") {
-    toastWarn("Tu versión no soporta MP4; se exporta WebM. Convierte con: ffmpeg -i in.webm out.mp4");
+  // Silencia los altavoces durante el export (sin cortar el audio grabado).
+  let muted = false;
+  if (S.mediaSrcNode && S.audioCtx) {
+    try {
+      S.mediaSrcNode.disconnect(S.audioCtx.destination);
+      muted = true;
+    } catch {}
   }
 
-  const canvas = $("preview");
-  const canvasStream = canvas.captureStream(30);
+  // Siempre se graba WebM (códec fiable); luego ffmpeg lo pasa a MP4/MOV.
+  const mime = pickRecordMime();
+  const canvasStream = $("preview").captureStream(30);
   const audioTracks = S.audioDest ? S.audioDest.stream.getAudioTracks() : [];
   const out = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
 
@@ -495,7 +754,7 @@ async function exportVideo() {
   await new Promise((resolve) => {
     const step = () => {
       drawAt(video.currentTime);
-      $("expPct").textContent = `${Math.min(99, Math.round((video.currentTime / S.duration) * 100))}%`;
+      setProgress(Math.min(99, (video.currentTime / S.duration) * 100));
       if (video.ended || video.currentTime >= S.duration - 0.05) {
         resolve();
         return;
@@ -509,17 +768,28 @@ async function exportVideo() {
   await done;
   video.pause();
 
-  const blob = new Blob(chunks, { type: mime });
+  // Restaura el audio a los altavoces.
+  if (muted) {
+    try {
+      S.mediaSrcNode.connect(S.audioCtx.destination);
+    } catch {}
+  }
+
+  const fmt = S.settings.exportFmt; // mp4 | mov | webm
+  if (fmt !== "webm") setProgress(100, `Convirtiendo a ${fmt.toUpperCase()}…`, "casi listo");
+
+  const blob = new Blob(chunks, { type: "video/webm" });
   const buffer = await blob.arrayBuffer();
   const r = await window.studio.saveVideo({
     buffer: new Uint8Array(buffer),
-    suggested: `pragmascreenstudio-${Date.now()}.${ext}`,
+    suggested: `pragmascreenstudio-${Date.now()}.${fmt}`,
+    format: fmt,
   });
 
-  $("expPct").textContent = "100%";
   hide("exporting");
   S.exporting = false;
-  if (r.saved) toastWarn(`Guardado en: ${r.path}`, true);
+  if (r.saved) showToast(`Guardado: ${r.path}`, true);
+  else if (r.error) showToast(`No se pudo convertir: ${r.error}`);
 }
 
 // ───────────────────────── Utilidades ─────────────────────────
@@ -616,20 +886,63 @@ function bindControls() {
   link("padRange", (v) => { S.settings.padding = v / 100; $("padVal").textContent = `${v}%`; });
   link("radRange", (v) => { S.settings.radius = v; $("radVal").textContent = `${v}px`; });
 
-  const colors = ["#111114", "#000000", "#1e1b4b", "#0f766e", "#7c3aed", "#f1f5f9"];
-  const sw = $("swatches");
-  colors.forEach((c, i) => {
-    const b = document.createElement("div");
-    b.className = "sw" + (i === 0 ? " sel" : "");
-    b.style.background = c;
-    b.onclick = () => {
-      document.querySelectorAll(".sw").forEach((x) => x.classList.remove("sel"));
-      b.classList.add("sel");
-      S.settings.bg = c;
-      if (!S.playing) drawAt(video.currentTime);
-    };
-    sw.appendChild(b);
-  });
+  // Paletas de color (fondo y subtítulos). Cada grupo es independiente.
+  const buildSwatches = (containerId, colors, getSel, setSel) => {
+    const wrap = $(containerId);
+    colors.forEach((c) => {
+      const b = document.createElement("div");
+      b.className = "sw" + (c === getSel() ? " sel" : "");
+      b.style.background = c;
+      b.dataset.c = c;
+      b.onclick = () => {
+        wrap.querySelectorAll(".sw").forEach((x) => x.classList.remove("sel"));
+        b.classList.add("sel");
+        setSel(c);
+        if (!S.playing) drawAt(video.currentTime);
+      };
+      wrap.appendChild(b);
+    });
+  };
+  buildSwatches("swatches", ["#111114", "#000000", "#1e1b4b", "#0f766e", "#7c3aed", "#f1f5f9"],
+    () => S.settings.bg, (c) => (S.settings.bg = c));
+  buildSwatches("subColors", ["#ffffff", "#facc15", "#22d3ee", "#a78bfa", "#000000"],
+    () => S.settings.subColor, (c) => (S.settings.subColor = c));
+
+  // Per-zoom: duración, activar/desactivar y eliminar.
+  $("segHold").oninput = (e) => {
+    const seg = selectedSeg();
+    if (!seg) return;
+    seg.hold = +e.target.value / 100;
+    $("segHoldVal").textContent = `${seg.hold.toFixed(1)}s`;
+    recomputeZoom();
+    buildTimeline();
+    if (!S.playing) drawAt(video.currentTime);
+  };
+  $("segToggle").onclick = () => {
+    const seg = selectedSeg();
+    if (!seg) return;
+    seg.enabled = !seg.enabled;
+    recomputeZoom();
+    buildTimeline();
+    updateSegPanel();
+    if (!S.playing) drawAt(video.currentTime);
+  };
+  $("segDelete").onclick = () => S.selectedSegId && deleteSegment(S.selectedSegId);
+
+  // Subtítulos.
+  $("subsOn").onchange = (e) => {
+    S.settings.subsOn = e.target.checked;
+    $("subsControls").style.display = e.target.checked ? "" : "none";
+    if (!S.playing) drawAt(video.currentTime);
+  };
+  $("subsGen").onclick = generateSubtitles;
+  $("subStyle").onchange = (e) => { S.settings.subStyle = e.target.value; if (!S.playing) drawAt(video.currentTime); };
+  $("subPos").onchange = (e) => { S.settings.subPos = e.target.value; if (!S.playing) drawAt(video.currentTime); };
+  link("subSize", (v) => { S.settings.subSize = v / 100; $("subSizeVal").textContent = `${v}%`; });
+
+  // Proyectos.
+  $("saveProject").onclick = saveProjectFn;
+  $("openProject").onclick = openProjectFn;
 
   S.unstop = window.studio.onGlobalStop(() => {
     if (!$("view-recording").classList.contains("hidden")) stopRecording();
