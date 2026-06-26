@@ -151,18 +151,35 @@ ipcMain.on("stop-capture", () => {
   }
 });
 
+let currentFfmpeg = null;
+let exportCanceled = false;
+
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) return reject(new Error("ffmpeg no disponible"));
     const proc = spawn(ffmpegPath, args);
+    currentFfmpeg = proc;
     let err = "";
     proc.stderr.on("data", (d) => (err += d.toString()));
-    proc.on("error", reject);
-    proc.on("close", (code) =>
-      code === 0 ? resolve() : reject(new Error("ffmpeg falló: " + err.slice(-400))),
-    );
+    proc.on("error", (e) => {
+      currentFfmpeg = null;
+      reject(e);
+    });
+    proc.on("close", (code) => {
+      currentFfmpeg = null;
+      code === 0 ? resolve() : reject(new Error("ffmpeg falló: " + err.slice(-400)));
+    });
   });
 }
+
+ipcMain.on("cancel-ffmpeg", () => {
+  exportCanceled = true;
+  if (currentFfmpeg) {
+    try {
+      currentFfmpeg.kill("SIGKILL");
+    } catch {}
+  }
+});
 
 // Convierte un WebM a MP4/MOV (H.264 + AAC, +faststart). Dimensiones pares.
 function transcode(inputPath, outputPath) {
@@ -253,6 +270,7 @@ ipcMain.handle("save-video", async (_e, { buffer, suggested, format }) => {
     filters,
   });
   if (canceled || !filePath) return { saved: false };
+  exportCanceled = false;
 
   if (fmt === "webm") {
     fs.writeFileSync(filePath, Buffer.from(buffer));
@@ -273,6 +291,12 @@ ipcMain.handle("save-video", async (_e, { buffer, suggested, format }) => {
     await transcode(tmp, filePath);
     return { saved: true, path: filePath };
   } catch (e) {
+    if (exportCanceled) {
+      try {
+        fs.rmSync(filePath, { force: true });
+      } catch {}
+      return { saved: false, canceled: true };
+    }
     // Último recurso: deja el WebM junto al destino.
     const alt = filePath.replace(/\.(mp4|mov)$/i, ".webm");
     try {

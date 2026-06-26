@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("studio", {
   startCapture: () => ipcRenderer.send("start-capture"),
   stopCapture: () => ipcRenderer.send("stop-capture"),
   saveVideo: (payload) => ipcRenderer.invoke("save-video", payload),
+  cancelExport: () => ipcRenderer.send("cancel-ffmpeg"),
   saveProject: (payload) => ipcRenderer.invoke("save-project", payload),
   openProject: () => ipcRenderer.invoke("open-project"),
   getAiConfig: () => ipcRenderer.invoke("get-ai-config"),

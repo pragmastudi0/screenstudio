@@ -940,6 +940,7 @@ function setProgress(pct, label, sub) {
 async function exportVideo() {
   if (S.exporting) return;
   S.exporting = true;
+  S.exportCancel = false;
   stopPlayback();
   show("exporting");
   setProgress(0, "Renderizando video…", "se renderiza en tiempo real");
@@ -975,6 +976,10 @@ async function exportVideo() {
 
   await new Promise((resolve) => {
     const step = () => {
+      if (S.exportCancel) {
+        resolve();
+        return;
+      }
       drawAt(video.currentTime);
       setProgress(Math.min(99, ((video.currentTime - start) / span) * 100));
       if (video.ended || video.currentTime >= end - 0.05) {
@@ -997,6 +1002,14 @@ async function exportVideo() {
     } catch {}
   }
 
+  // Cancelado durante el renderizado: no se guarda nada.
+  if (S.exportCancel) {
+    hide("exporting");
+    S.exporting = false;
+    showToast("Exportación cancelada");
+    return;
+  }
+
   const fmt = S.settings.exportFmt; // mp4 | mov | webm
   if (fmt !== "webm") setProgress(100, `Convirtiendo a ${fmt.toUpperCase()}…`, "casi listo");
 
@@ -1010,7 +1023,8 @@ async function exportVideo() {
 
   hide("exporting");
   S.exporting = false;
-  if (r.saved) showToast(r.note ? `⚠ ${r.note}` : `Guardado: ${r.path}`, !r.note);
+  if (r.canceled || S.exportCancel) showToast("Exportación cancelada");
+  else if (r.saved) showToast(r.note ? `⚠ ${r.note}` : `Guardado: ${r.path}`, !r.note);
   else if (r.error) showToast(`No se pudo convertir: ${r.error}`);
 }
 
@@ -1068,6 +1082,10 @@ function bindControls() {
     loadSources();
   };
   $("exportBtn").onclick = exportVideo;
+  $("cancelExport").onclick = () => {
+    S.exportCancel = true;
+    window.studio.cancelExport();
+  };
   $("playBtn").onclick = () => (S.playing ? stopPlayback() : startPlayback());
   $("addZoom").onclick = addZoomAtPlayhead;
 
