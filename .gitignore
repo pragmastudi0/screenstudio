@@ -1,40 +1,15 @@
-# dependencies
+# dependencias
 /node_modules
-/.pnp
-.pnp.*
 
-# next.js
-/.next/
-/out/
-next-env.d.ts
+# build / empaquetado
+/dist
+/out
 
-# production
-/build
-
-# misc
+# sistema
 .DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env
-.env*.local
-
-# prisma
-/prisma/*.db
-
-# storage (uploads locales)
-/storage/uploads/*
-!/storage/uploads/.gitkeep
-
-# typescript
-*.tsbuildinfo
+*.log
 
 # editor
+.idea
 .vscode/*
 !.vscode/extensions.json
-.idea

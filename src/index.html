@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>ScreenStudio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="titlebar"><span class="dot"></span> ScreenStudio</div>
+
+  <!-- ░░ Vista 1: Configurar y grabar ░░ -->
+  <section id="view-setup" class="view">
+    <header class="hd">
+      <h1>Nueva grabación</h1>
+      <p class="sub">Graba tu pantalla con zoom automático al hacer click y voz en off.</p>
+    </header>
+
+    <div class="row">
+      <label class="lbl">¿Qué quieres grabar?</label>
+      <button id="refreshSources" class="btn ghost sm">↻ Actualizar</button>
+    </div>
+    <div id="sources" class="sources"></div>
+
+    <div class="opts">
+      <label class="opt">
+        <input type="checkbox" id="optMic" checked />
+        <span>Grabar micrófono (voz en off)</span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" id="optAutozoom" checked />
+        <span>Zoom automático al hacer click</span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" id="optClickFx" checked />
+        <span>Resaltar clicks</span>
+      </label>
+    </div>
+
+    <div id="permWarn" class="warn hidden"></div>
+
+    <div class="actions">
+      <button id="startBtn" class="btn primary lg" disabled>● Empezar a grabar</button>
+    </div>
+  </section>
+
+  <!-- ░░ Overlay durante la grabación ░░ -->
+  <section id="view-recording" class="view hidden recording">
+    <div class="rec-pulse"></div>
+    <div class="rec-time" id="recTime">00:00</div>
+    <p class="sub">Grabando… interactúa normalmente con tu software.</p>
+    <button id="stopBtn" class="btn danger lg">■ Detener</button>
+    <p class="hint">El zoom y los clicks se aplican después, en el editor.</p>
+  </section>
+
+  <!-- ░░ Vista 2: Editor ░░ -->
+  <section id="view-editor" class="view hidden">
+    <header class="hd row between">
+      <div>
+        <h1>Editor</h1>
+        <p class="sub">Ajusta el zoom, el fondo y exporta tu video.</p>
+      </div>
+      <div class="row gap">
+        <button id="newRec" class="btn ghost">Nueva grabación</button>
+        <button id="exportBtn" class="btn primary">⤓ Exportar video</button>
+      </div>
+    </header>
+
+    <div class="editor">
+      <div class="stage">
+        <canvas id="preview"></canvas>
+        <div class="transport">
+          <button id="playBtn" class="btn ghost sm">▶</button>
+          <input id="scrub" type="range" min="0" max="1000" value="0" />
+          <span id="tlabel" class="tlabel">0:00</span>
+        </div>
+        <div class="timeline" id="timeline"></div>
+      </div>
+
+      <aside class="panel">
+        <div class="grp">
+          <label class="opt"><input type="checkbox" id="edAutozoom" checked /><span>Zoom automático</span></label>
+        </div>
+        <div class="grp">
+          <label class="ctl">Intensidad del zoom <b id="zoomVal">2.0×</b></label>
+          <input id="zoomRange" type="range" min="120" max="320" value="200" />
+        </div>
+        <div class="grp">
+          <label class="ctl">Duración del zoom <b id="holdVal">1.8s</b></label>
+          <input id="holdRange" type="range" min="60" max="400" value="180" />
+        </div>
+        <div class="grp">
+          <label class="opt"><input type="checkbox" id="edClickFx" checked /><span>Resaltar clicks</span></label>
+        </div>
+        <hr/>
+        <div class="grp">
+          <label class="ctl">Relleno (padding) <b id="padVal">6%</b></label>
+          <input id="padRange" type="range" min="0" max="16" value="6" />
+        </div>
+        <div class="grp">
+          <label class="ctl">Esquinas <b id="radVal">14px</b></label>
+          <input id="radRange" type="range" min="0" max="40" value="14" />
+        </div>
+        <div class="grp">
+          <label class="ctl">Fondo</label>
+          <div class="swatches" id="swatches"></div>
+        </div>
+        <div class="grp meta">
+          <span id="clickCount">0 clicks detectados</span>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <div id="exporting" class="overlay hidden">
+    <div class="spinner"></div>
+    <p id="expLabel">Exportando video… <b id="expPct">0%</b></p>
+    <p class="hint">Se renderiza en tiempo real; tardará lo que dure el video.</p>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
