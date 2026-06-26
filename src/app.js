@@ -218,8 +218,9 @@ async function loadVideoBlob(blob) {
     oh = Math.round((oh * 1920) / ow);
     ow = 1920;
   }
-  canvas.width = ow;
-  canvas.height = oh;
+  // Dimensiones pares (requisito de H.264 al exportar MP4/MOV).
+  canvas.width = ow - (ow % 2);
+  canvas.height = oh - (oh % 2);
 }
 
 function enterEditor() {

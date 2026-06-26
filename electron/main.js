@@ -161,6 +161,8 @@ function transcode(inputPath, outputPath) {
       "-c:v", "libx264",
       "-preset", "veryfast",
       "-pix_fmt", "yuv420p",
+      // H.264 exige dimensiones pares: redondea ancho/alto al par inferior.
+      "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
       "-crf", "20",
       "-c:a", "aac",
       "-b:a", "160k",
