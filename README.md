@@ -5,11 +5,14 @@ App de escritorio (Electron) para **grabar tu pantalla con zoom automático haci
 ## ✨ Qué hace
 
 - 🖥️ **Graba pantalla completa o una ventana** (elige la fuente).
-- 🔍 **Zoom automático al hacer click**: rastrea el mouse a nivel de sistema y, al editar, acerca la imagen suavemente hacia cada click.
+- ⏱️ **Cuenta regresiva** y **auto-minimiza** la ventana al grabar (no sale en el video). Detén con **⌘⇧2 / Ctrl+Shift+2**.
+- 🔍 **Zoom automático al hacer click**: rastrea el mouse a nivel de sistema y acerca la imagen suavemente hacia cada click.
+- ✏️ **Zooms editables**: elimina, activa/desactiva o **añade** zooms manualmente desde la línea de tiempo.
+- 👆 **Cursor "manito"** (o resaltado tipo spotlight) que sigue al mouse y reacciona al click.
 - 🟣 **Resalta los clicks** con un pulso animado.
-- 🎙️ **Voz en off**: graba tu micrófono junto con la pantalla.
-- 🎬 **Editor**: ajusta intensidad/duración del zoom, padding, esquinas redondeadas y color de fondo; previsualiza en vivo.
-- ⤓ **Exporta** a video WebM (render en tiempo real con el zoom y los efectos aplicados).
+- 🎙️ **Voz en off**: graba tu micrófono y escúchalo mientras editas.
+- 🎬 **Editor**: intensidad/duración del zoom, padding, esquinas, color de fondo; previsualiza en vivo.
+- ⤓ **Exporta en MP4** (compatible con **WhatsApp** y redes) o WebM.
 
 ## 🧱 Stack
 

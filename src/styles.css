@@ -94,7 +94,18 @@ button, input, label { -webkit-app-region: no-drag; }
 .transport input[type=range] { flex: 1; accent-color: var(--primary); }
 .tlabel { color: var(--mut); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 36px; }
 .timeline { position: relative; height: 30px; margin-top: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.tick { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--primary); border-radius: 2px; opacity: .85; }
+.tick { position: absolute; top: 0; bottom: 0; width: 3px; background: #f472b6; border-radius: 2px; opacity: .9; z-index: 2; }
+.zone { position: absolute; top: 0; bottom: 0; background: rgba(139,92,246,.28); border: 1px solid rgba(139,92,246,.6); border-radius: 5px; cursor: pointer; }
+.zone:hover { background: rgba(139,92,246,.42); }
+
+.zoomlist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; background: #18181b; border: 1px solid var(--line2); border-radius: 7px; padding: 3px 6px 3px 9px; color: var(--mut); }
+.chip b { color: var(--txt); font-weight: 600; }
+.chip .x { cursor: pointer; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; color: #f87171; }
+.chip .x:hover { background: #7f1d1d; color: #fff; }
+.chip.off { opacity: .45; }
+
+.sel { width: 100%; background: var(--bg); border: 1px solid var(--line2); border-radius: 8px; color: var(--txt); padding: 7px 9px; font-size: 13px; }
 
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-y: auto; }
 .grp { margin-bottom: 16px; }
@@ -114,3 +125,10 @@ button, input, label { -webkit-app-region: no-drag; }
 }
 .spinner { width: 42px; height: 42px; border: 3px solid #2a2a31; border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.count-num {
+  font-size: 120px; font-weight: 800; line-height: 1; color: #fff;
+  animation: pop .9s ease-out infinite; font-variant-numeric: tabular-nums;
+}
+@keyframes pop { 0% { transform: scale(.6); opacity: .2; } 40% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.1); opacity: .15; } }
+#stopHint, #stopBtn b { background: #18181b; border: 1px solid var(--line2); border-radius: 6px; padding: 1px 7px; }

@@ -1,7 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 // ScreenStudio — Proceso principal de Electron
 // Crea la ventana, expone fuentes de captura y rastrea el mouse global
-// (clicks y movimiento) para el zoom automático.
+// (clicks) para el zoom automático. Durante la grabación minimiza la
+// ventana para que NO aparezca en el video y registra un atajo global
+// para detener.
 // ─────────────────────────────────────────────────────────────
 const {
   app,
@@ -10,13 +12,14 @@ const {
   desktopCapturer,
   screen,
   dialog,
+  globalShortcut,
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
 let mainWindow = null;
 
-// uiohook-napi captura el mouse/teclado a nivel de sistema operativo.
+// uiohook-napi captura el mouse a nivel de sistema operativo.
 // Requiere permiso de Accesibilidad en macOS.
 let uIOhook = null;
 try {
@@ -24,6 +27,8 @@ try {
 } catch (e) {
   console.error("[main] No se pudo cargar uiohook-napi:", e.message);
 }
+
+const STOP_SHORTCUT = "CommandOrControl+Shift+2";
 
 let tracking = false;
 let lastMove = 0;
@@ -55,10 +60,9 @@ function createWindow() {
   if (process.argv.includes("--dev")) mainWindow.webContents.openDevTools({ mode: "detach" });
 }
 
-// ── Hook global del mouse ──
+// ── Hook global del mouse (solo clicks) ──
 function setupMouseHook() {
   if (!uIOhook) return;
-
   const clamp = (v) => Math.max(0, Math.min(1, v));
 
   uIOhook.on("mousedown", (e) => {
@@ -71,6 +75,7 @@ function setupMouseHook() {
     });
   });
 
+  // Movimiento del cursor (para dibujar el cursor "manito" en el editor).
   uIOhook.on("mousemove", (e) => {
     if (!tracking || !mainWindow) return;
     const now = Date.now();
@@ -111,16 +116,38 @@ ipcMain.handle("get-display", () => {
   return { width: d.size.width, height: d.size.height, scaleFactor: d.scaleFactor };
 });
 
-ipcMain.on("tracking", (_e, on) => {
+// Comienza la captura: refresca métricas, activa el hook, minimiza la
+// ventana (para que no salga en el video) y registra el atajo de detener.
+ipcMain.on("start-capture", () => {
   refreshDisplayMetrics();
-  tracking = !!on;
+  tracking = true;
+  if (mainWindow) mainWindow.minimize();
+  globalShortcut.register(STOP_SHORTCUT, () => {
+    if (mainWindow) mainWindow.webContents.send("global-stop");
+  });
+});
+
+// Termina la captura: desactiva hook, libera atajo y restaura la ventana.
+ipcMain.on("stop-capture", () => {
+  tracking = false;
+  globalShortcut.unregister(STOP_SHORTCUT);
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
 });
 
 ipcMain.handle("save-video", async (_e, { buffer, suggested }) => {
+  const ext = (suggested || "screenstudio.webm").split(".").pop().toLowerCase();
+  const filters =
+    ext === "mp4"
+      ? [{ name: "Video MP4", extensions: ["mp4"] }]
+      : [{ name: "Video WebM", extensions: ["webm"] }];
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
     title: "Guardar video",
     defaultPath: suggested || "screenstudio.webm",
-    filters: [{ name: "Video WebM", extensions: ["webm"] }],
+    filters,
   });
   if (canceled || !filePath) return { saved: false };
   fs.writeFileSync(filePath, Buffer.from(buffer));
@@ -138,11 +165,15 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("window-all-closed", () => {
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
   if (uIOhook) {
     try {
       uIOhook.stop();
     } catch {}
   }
+});
+
+app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

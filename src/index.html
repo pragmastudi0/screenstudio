@@ -35,6 +35,7 @@
         <input type="checkbox" id="optClickFx" checked />
         <span>Resaltar clicks</span>
       </label>
+      <p class="hint">El zoom automático es más preciso grabando la <b>pantalla completa</b>.</p>
     </div>
 
     <div id="permWarn" class="warn hidden"></div>
@@ -50,8 +51,15 @@
     <div class="rec-time" id="recTime">00:00</div>
     <p class="sub">Grabando… interactúa normalmente con tu software.</p>
     <button id="stopBtn" class="btn danger lg">■ Detener</button>
-    <p class="hint">El zoom y los clicks se aplican después, en el editor.</p>
+    <p class="hint">La ventana se minimizó para no salir en el video.<br/>
+      Para detener: pulsa <b id="stopHint">⌘⇧2</b> o vuelve a esta ventana.</p>
   </section>
+
+  <!-- ░░ Cuenta regresiva ░░ -->
+  <div id="countdown" class="overlay hidden">
+    <div class="count-num" id="countNum">3</div>
+    <p class="hint">Preparando la grabación…</p>
+  </div>
 
   <!-- ░░ Vista 2: Editor ░░ -->
   <section id="view-editor" class="view hidden">
@@ -73,8 +81,10 @@
           <button id="playBtn" class="btn ghost sm">▶</button>
           <input id="scrub" type="range" min="0" max="1000" value="0" />
           <span id="tlabel" class="tlabel">0:00</span>
+          <button id="addZoom" class="btn ghost sm" title="Añadir un zoom en este punto">＋ Zoom</button>
         </div>
         <div class="timeline" id="timeline"></div>
+        <div class="zoomlist" id="zoomlist"></div>
       </div>
 
       <aside class="panel">
@@ -92,6 +102,14 @@
         <div class="grp">
           <label class="opt"><input type="checkbox" id="edClickFx" checked /><span>Resaltar clicks</span></label>
         </div>
+        <div class="grp">
+          <label class="ctl">Cursor</label>
+          <select id="cursorStyle" class="sel">
+            <option value="hand">Manito 👆</option>
+            <option value="spotlight">Resaltado</option>
+            <option value="off">Ninguno</option>
+          </select>
+        </div>
         <hr/>
         <div class="grp">
           <label class="ctl">Relleno (padding) <b id="padVal">6%</b></label>
@@ -104,6 +122,14 @@
         <div class="grp">
           <label class="ctl">Fondo</label>
           <div class="swatches" id="swatches"></div>
+        </div>
+        <hr/>
+        <div class="grp">
+          <label class="ctl">Formato de exportación</label>
+          <select id="exportFmt" class="sel">
+            <option value="mp4">MP4 (WhatsApp, redes) ✓</option>
+            <option value="webm">WebM</option>
+          </select>
         </div>
         <div class="grp meta">
           <span id="clickCount">0 clicks detectados</span>
