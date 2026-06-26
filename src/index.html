@@ -111,6 +111,7 @@
         </div>
         <div class="grp seg" id="segPanel" style="display:none">
           <label class="ctl">Zoom seleccionado <b id="segTitle"></b></label>
+          <p class="hint" style="margin:-2px 0 8px">🖐 Arrastra la imagen del preview para reencuadrar este zoom.</p>
           <label class="ctl">Duración de este zoom <b id="segHoldVal">1.8s</b></label>
           <input id="segHold" type="range" min="40" max="500" value="180" />
           <div class="row gap" style="margin-top:8px">
@@ -150,6 +151,13 @@
           <div class="grp">
             <label class="ctl">Transcripción automática (IA)</label>
             <input id="geminiKey" class="field" type="password" placeholder="API key de Gemini (gratis)" />
+            <select id="geminiModel" class="sel" style="margin-top:8px">
+              <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="gemini-flash-latest">gemini-flash-latest</option>
+              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+              <option value="gemini-1.5-flash">gemini-1.5-flash (legacy)</option>
+            </select>
             <button id="subsAI" class="btn primary sm" style="margin-top:8px;width:100%">✨ Transcribir con Gemini</button>
             <p class="hint" style="margin-top:6px">Reconoce tu voz en off automáticamente. Saca la key gratis en <b>aistudio.google.com/apikey</b>.</p>
           </div>

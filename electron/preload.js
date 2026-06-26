@@ -9,8 +9,9 @@ contextBridge.exposeInMainWorld("studio", {
   saveVideo: (payload) => ipcRenderer.invoke("save-video", payload),
   saveProject: (payload) => ipcRenderer.invoke("save-project", payload),
   openProject: () => ipcRenderer.invoke("open-project"),
-  getApiKey: () => ipcRenderer.invoke("get-api-key"),
+  getAiConfig: () => ipcRenderer.invoke("get-ai-config"),
   transcribe: (payload) => ipcRenderer.invoke("transcribe", payload),
+  log: (msg) => ipcRenderer.send("renderer-log", msg),
   onMouseEvent: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on("mouse-event", listener);

@@ -149,7 +149,7 @@ button, input, label { -webkit-app-region: no-drag; }
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
   background: #18181b; border: 1px solid var(--line2); color: var(--txt);
   padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 60;
-  max-width: 80vw; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+  max-width: 80vw; box-shadow: 0 8px 30px rgba(0,0,0,.5); cursor: pointer;
 }
 .toast.ok { background: #052e16; border-color: #166534; color: #bbf7d0; }
 

@@ -72,6 +72,21 @@ const isMac = navigator.platform.toUpperCase().includes("MAC");
 const video = document.createElement("video");
 video.playsInline = true;
 
+// ── Registro de errores ──
+// Reenvía errores a la terminal (npm start) para poder copiarlos.
+function logToMain(...a) {
+  try {
+    window.studio.log(a.map((x) => (typeof x === "string" ? x : x?.message || JSON.stringify(x))).join(" "));
+  } catch {}
+}
+window.addEventListener("error", (e) => logToMain("window.error:", e.message, `${e.filename}:${e.lineno}`));
+window.addEventListener("unhandledrejection", (e) => logToMain("unhandledrejection:", e.reason?.message || String(e.reason)));
+const _origError = console.error.bind(console);
+console.error = (...a) => {
+  _origError(...a);
+  logToMain("console.error:", ...a);
+};
+
 // ───────────────────────── Vista 1: fuentes ─────────────────────────
 async function loadSources() {
   S.display = await window.studio.getDisplay();
@@ -316,7 +331,8 @@ async function transcribeWithAI() {
   btn.textContent = "Transcribiendo…";
   try {
     const buf = new Uint8Array(await S.recordedBlob.arrayBuffer());
-    const r = await window.studio.transcribe({ video: buf, apiKey: key });
+    const model = $("geminiModel").value;
+    const r = await window.studio.transcribe({ video: buf, apiKey: key, model });
     if (!r.ok) {
       showToast(`IA: ${r.error}`);
       return;
@@ -422,8 +438,12 @@ function showToast(msg, ok) {
   const el = $("toast");
   el.textContent = msg;
   el.className = "toast" + (ok ? " ok" : "");
+  el.title = "Clic para copiar";
+  el.onclick = () => navigator.clipboard.writeText(msg).then(() => (el.textContent = "Copiado ✓"));
+  if (!ok) logToMain("toast-error:", msg);
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => el.classList.add("hidden"), 3600);
+  // Los errores quedan más tiempo para poder leerlos/copiarlos.
+  showToast._t = setTimeout(() => el.classList.add("hidden"), ok ? 4000 : 9000);
 }
 
 // ───────────────────────── Editor / render ─────────────────────────
@@ -691,8 +711,19 @@ function selectedSeg() {
 
 function selectSegment(id) {
   S.selectedSegId = id;
+  const seg = selectedSeg();
+  // Lleva el reproductor a un punto donde el zoom está aplicado, para que se
+  // pueda ver y arrastrar la vista.
+  if (seg && S.duration) {
+    const t = Math.min(S.duration - 0.01, seg.start + 0.25);
+    video.currentTime = t;
+    $("scrub").value = Math.round((t / S.duration) * 1000) || 0;
+    $("tlabel").textContent = fmt(t);
+    video.addEventListener("seeked", () => { if (!S.playing) drawAt(video.currentTime); }, { once: true });
+  }
   buildTimeline();
   updateSegPanel();
+  if (!S.playing) drawAt(video.currentTime);
 }
 
 function deleteSegment(id) {
@@ -707,6 +738,7 @@ function deleteSegment(id) {
 function updateSegPanel() {
   const seg = selectedSeg();
   const panel = $("segPanel");
+  $("preview").style.cursor = seg ? "grab" : "default";
   if (!seg) {
     panel.style.display = "none";
     return;
@@ -733,13 +765,67 @@ function rebuildSegments() {
 
 function addZoomAtPlayhead() {
   const t = video.currentTime;
-  // Centra el zoom en el cursor de ese instante, o en el centro.
   const cur = samplePath(S.moves, t) || { x: 0.5, y: 0.5 };
-  S.segments.push(makeManualSegment(t, cur.x, cur.y));
+  const seg = makeManualSegment(t, cur.x, cur.y);
+  seg.focus = { x: cur.x, y: cur.y }; // foco reubicable arrastrando
+  S.segments.push(seg);
   S.segments.sort((a, b) => a.start - b.start);
   recomputeZoom();
-  buildTimeline();
-  if (!S.playing) drawAt(t);
+  selectSegment(seg.id);
+  showToast("Zoom añadido — arrastra la vista en el preview para ubicarlo", true);
+}
+
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+// Dimensiones del área interna (con padding) del canvas.
+function innerDims() {
+  const canvas = $("preview");
+  const W = canvas.width;
+  const H = canvas.height;
+  const margin = Math.round(Math.min(W, H) * S.settings.padding);
+  return { iw: W - 2 * margin, ih: H - 2 * margin };
+}
+
+// Arrastrar la vista del zoom seleccionado para reencuadrar.
+function setupDrag() {
+  const canvas = $("preview");
+  canvas.addEventListener("mousedown", (e) => {
+    const seg = selectedSeg();
+    if (!seg) return;
+    if (!seg.focus) {
+      const z = sampleZoom(S.keyframes, video.currentTime);
+      seg.focus = { x: z.x, y: z.y };
+    }
+    S.drag = { startX: e.clientX, startY: e.clientY, fx: seg.focus.x, fy: seg.focus.y };
+    canvas.style.cursor = "grabbing";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!S.drag) return;
+    const seg = selectedSeg();
+    if (!seg) return;
+    const canvas = $("preview");
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    const { iw, ih } = innerDims();
+    const dw = iw * S.settings.zoom;
+    const dh = ih * S.settings.zoom;
+    const dxpix = (e.clientX - S.drag.startX) * sx;
+    const dypix = (e.clientY - S.drag.startY) * sy;
+    seg.focus = {
+      x: clamp01(S.drag.fx - dxpix / dw),
+      y: clamp01(S.drag.fy - dypix / dh),
+    };
+    recomputeZoom();
+    drawAt(video.currentTime);
+  });
+  window.addEventListener("mouseup", () => {
+    if (S.drag) {
+      S.drag = null;
+      $("preview").style.cursor = selectedSeg() ? "grab" : "default";
+    }
+  });
 }
 
 // ───────────────────────── Audio ─────────────────────────
@@ -983,8 +1069,9 @@ function bindControls() {
   };
   $("subsGen").onclick = generateSubtitles;
   $("subsAI").onclick = transcribeWithAI;
-  window.studio.getApiKey().then((k) => {
-    if (k) $("geminiKey").value = k;
+  window.studio.getAiConfig().then((c) => {
+    if (c.key) $("geminiKey").value = c.key;
+    if (c.model) $("geminiModel").value = c.model;
   });
   $("subStyle").onchange = (e) => { S.settings.subStyle = e.target.value; if (!S.playing) drawAt(video.currentTime); };
   $("subPos").onchange = (e) => { S.settings.subPos = e.target.value; if (!S.playing) drawAt(video.currentTime); };
@@ -1012,4 +1099,5 @@ function bindControls() {
 
 document.body.classList.toggle("mac", isMac);
 bindControls();
+setupDrag();
 loadSources();

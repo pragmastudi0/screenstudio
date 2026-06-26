@@ -210,8 +210,9 @@ function cleanJson(text) {
 }
 
 // Transcribe el audio con Gemini (API gratuita) y devuelve cues con tiempos.
-async function geminiTranscribe(apiKey, audioBase64) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+async function geminiTranscribe(apiKey, audioBase64, model) {
+  const m = model || "gemini-2.0-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
   const prompt =
     "Transcribe este audio en su idioma original. Devuelve EXCLUSIVAMENTE un array JSON " +
     'de objetos {"start": number, "end": number, "text": string}, donde start y end son ' +
@@ -286,16 +287,21 @@ ipcMain.handle("save-video", async (_e, { buffer, suggested, format }) => {
 });
 
 // ── Transcripción automática con Gemini ──
-ipcMain.handle("get-api-key", () => readConfig().geminiKey || "");
+ipcMain.handle("get-ai-config", () => {
+  const c = readConfig();
+  return { key: c.geminiKey || "", model: c.geminiModel || "gemini-2.0-flash" };
+});
 
-ipcMain.handle("transcribe", async (_e, { video, apiKey }) => {
+// Registro de errores del renderer en la terminal (npm start).
+ipcMain.on("renderer-log", (_e, msg) => console.error("[renderer]", msg));
+
+ipcMain.handle("transcribe", async (_e, { video, apiKey, model }) => {
   try {
-    if (apiKey) {
-      const c = readConfig();
-      c.geminiKey = apiKey;
-      writeConfig(c);
-    }
-    const key = apiKey || readConfig().geminiKey;
+    const c = readConfig();
+    if (apiKey) c.geminiKey = apiKey;
+    if (model) c.geminiModel = model;
+    if (apiKey || model) writeConfig(c);
+    const key = apiKey || c.geminiKey;
     if (!key) return { ok: false, error: "Falta la API key de Gemini" };
     if (!ffmpegPath) return { ok: false, error: "ffmpeg no disponible; ejecuta npm install" };
 
@@ -306,13 +312,14 @@ ipcMain.handle("transcribe", async (_e, { video, apiKey }) => {
       fs.writeFileSync(tmpV, Buffer.from(video));
       await extractAudio(tmpV, tmpA);
       const b64 = fs.readFileSync(tmpA).toString("base64");
-      const cues = await geminiTranscribe(key, b64);
+      const cues = await geminiTranscribe(key, b64, model);
       return { ok: true, cues };
     } finally {
       fs.rmSync(tmpV, { force: true });
       fs.rmSync(tmpA, { force: true });
     }
   } catch (e) {
+    console.error("[transcribe]", e.message);
     return { ok: false, error: e.message };
   }
 });

@@ -66,11 +66,20 @@ export function segmentsToKeyframes(segments, opts = {}) {
     const first = c[0];
     const last = c[c.length - 1];
     const segHold = seg.hold != null ? seg.hold : hold; // duración propia o global
-    kfs.push({ t: Math.max(0, first.t - lead), scale: 1, x: first.x, y: first.y });
-    kfs.push({ t: first.t, scale: zoom, x: first.x, y: first.y });
-    for (let i = 1; i < c.length; i++) kfs.push({ t: c[i].t, scale: zoom, x: c[i].x, y: c[i].y });
-    kfs.push({ t: last.t + segHold, scale: zoom, x: last.x, y: last.y });
-    kfs.push({ t: last.t + segHold + ease, scale: 1, x: last.x, y: last.y });
+    // Si el usuario reubicó el zoom (seg.focus), se usa ese punto fijo;
+    // si no, la cámara sigue a los clicks del segmento.
+    const f = seg.focus || null;
+    const x0 = f ? f.x : first.x;
+    const y0 = f ? f.y : first.y;
+    const xL = f ? f.x : last.x;
+    const yL = f ? f.y : last.y;
+    kfs.push({ t: Math.max(0, first.t - lead), scale: 1, x: x0, y: y0 });
+    kfs.push({ t: first.t, scale: zoom, x: x0, y: y0 });
+    if (!f) {
+      for (let i = 1; i < c.length; i++) kfs.push({ t: c[i].t, scale: zoom, x: c[i].x, y: c[i].y });
+    }
+    kfs.push({ t: last.t + segHold, scale: zoom, x: xL, y: yL });
+    kfs.push({ t: last.t + segHold + ease, scale: 1, x: xL, y: yL });
   }
   kfs.sort((a, b) => a.t - b.t);
   return kfs;
