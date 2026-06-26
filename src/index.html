@@ -92,6 +92,14 @@
           <label class="opt"><input type="checkbox" id="edAutozoom" checked /><span>Zoom automático</span></label>
         </div>
         <div class="grp">
+          <label class="ctl">Cantidad de zooms</label>
+          <select id="sensitivity" class="sel">
+            <option value="low">Pocos (solo lo importante)</option>
+            <option value="med" selected>Equilibrado</option>
+            <option value="high">Muchos</option>
+          </select>
+        </div>
+        <div class="grp">
           <label class="ctl">Intensidad del zoom <b id="zoomVal">2.0×</b></label>
           <input id="zoomRange" type="range" min="120" max="320" value="200" />
         </div>

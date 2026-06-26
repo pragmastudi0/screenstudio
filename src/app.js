@@ -28,6 +28,7 @@ const S = {
 
   settings: {
     autozoom: true,
+    sensitivity: "med",
     zoom: 2.0,
     hold: 1.8,
     clickFx: true,
@@ -48,6 +49,13 @@ const S = {
 };
 
 const LEAD = 0.25;
+// Presets de "cantidad de zooms": cuanto más grandes los gaps, menos zooms
+// (se agrupan y fusionan más clicks en un solo movimiento de cámara).
+const SENSITIVITY = {
+  low: { clusterGap: 3.5, mergeGap: 2.5 },
+  med: { clusterGap: 2.2, mergeGap: 1.2 },
+  high: { clusterGap: 1.2, mergeGap: 0.4 },
+};
 const $ = (id) => document.getElementById(id);
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const show = (id) => $(id).classList.remove("hidden");
@@ -216,11 +224,10 @@ async function onRecordingStopped() {
   canvas.width = ow;
   canvas.height = oh;
 
-  S.segments = buildSegments(S.clicks);
+  S.segments = buildSegments(S.clicks, SENSITIVITY[S.settings.sensitivity]);
   ensureAudioGraph();
   recomputeZoom();
   buildTimeline();
-  $("clickCount").textContent = `${S.clicks.length} clicks · ${S.segments.length} zooms`;
   $("scrub").value = 0;
 
   hide("view-recording");
@@ -417,6 +424,18 @@ function buildTimeline() {
     };
     list.appendChild(chip);
   });
+
+  const active = S.segments.filter((s) => s.enabled).length;
+  $("clickCount").textContent = `${S.clicks.length} clicks · ${active} zoom${active === 1 ? "" : "s"}`;
+}
+
+// Recalcula los zooms desde los clicks con la sensibilidad elegida.
+// (Reinicia ajustes manuales de zooms: añadidos/eliminados.)
+function rebuildSegments() {
+  S.segments = buildSegments(S.clicks, SENSITIVITY[S.settings.sensitivity]);
+  recomputeZoom();
+  buildTimeline();
+  if (!S.playing) drawAt(video.currentTime);
 }
 
 function addZoomAtPlayhead() {
@@ -585,6 +604,10 @@ function bindControls() {
   $("cursorStyle").onchange = (e) => {
     S.settings.cursor = e.target.value;
     if (!S.playing) drawAt(video.currentTime);
+  };
+  $("sensitivity").onchange = (e) => {
+    S.settings.sensitivity = e.target.value;
+    rebuildSegments();
   };
   $("exportFmt").onchange = (e) => (S.settings.exportFmt = e.target.value);
 

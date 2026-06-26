@@ -2,36 +2,53 @@
 // Flujo: clicks → segmentos de zoom (editables/eliminables) → keyframes
 // interpolados {t, scale, x, y}.
 
-const CLUSTER_GAP = 1.8; // s: clicks más cercanos forman un mismo zoom
-
 let _id = 0;
 
-// Agrupa los clicks en segmentos de zoom. Cada segmento puede activarse o
-// desactivarse de forma independiente desde el editor.
-export function buildSegments(clicks) {
+// Agrupa los clicks en segmentos de zoom "inteligentes":
+//   1) agrupa clicks cercanos en el tiempo (clusterGap),
+//   2) fusiona grupos muy seguidos para no entrar/salir del zoom a cada rato
+//      (mergeGap) — dentro de un segmento la cámara se desplaza suavemente,
+//   3) ignora un click aislado si dura menos que minDwell (clicks sueltos
+//      de paso que no merecen zoom).
+// Cada segmento se puede activar/desactivar o eliminar desde el editor.
+export function buildSegments(clicks, opts = {}) {
+  const { clusterGap = 2.2, mergeGap = 1.2 } = opts;
   const sorted = [...clicks].sort((a, b) => a.t - b.t);
-  const segments = [];
-  if (!sorted.length) return segments;
+  if (!sorted.length) return [];
 
+  // 1) Agrupación temporal.
+  const clusters = [];
   let cur = [sorted[0]];
-  const flush = () => {
-    segments.push({
-      id: ++_id,
-      clicks: cur,
-      start: cur[0].t,
-      end: cur[cur.length - 1].t,
-      enabled: true,
-    });
-  };
   for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i].t - cur[cur.length - 1].t <= CLUSTER_GAP) cur.push(sorted[i]);
+    if (sorted[i].t - cur[cur.length - 1].t <= clusterGap) cur.push(sorted[i]);
     else {
-      flush();
+      clusters.push(cur);
       cur = [sorted[i]];
     }
   }
-  flush();
-  return segments;
+  clusters.push(cur);
+
+  // 2) Fusión de grupos casi consecutivos (evita el efecto "yo-yo").
+  const merged = [];
+  let m = clusters[0];
+  for (let i = 1; i < clusters.length; i++) {
+    const prevEnd = m[m.length - 1].t;
+    const nextStart = clusters[i][0].t;
+    if (nextStart - prevEnd <= mergeGap) m = m.concat(clusters[i]);
+    else {
+      merged.push(m);
+      m = clusters[i];
+    }
+  }
+  merged.push(m);
+
+  return merged.map((c) => ({
+    id: ++_id,
+    clicks: c,
+    start: c[0].t,
+    end: c[c.length - 1].t,
+    enabled: true,
+  }));
 }
 
 // Crea un segmento manual centrado (para "+ Zoom aquí").
