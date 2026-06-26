@@ -10,7 +10,7 @@ App de escritorio (Electron) para **grabar tu pantalla con zoom automático haci
 - 🧠 **Cantidad de zooms ajustable** (Pocos / Equilibrado / Muchos): agrupa y fusiona clicks para no marear.
 - ✏️ **Zooms editables**: selecciona, ajusta la **duración de cada zoom**, elimina, activa/desactiva o **añade** zooms manualmente.
 - 👆 **Cursor "manito"** (o resaltado tipo spotlight) que sigue al mouse y reacciona al click.
-- 💬 **Subtítulos estilo CapCut**: genéralos desde tu guion, con estilos (clásico/contorno/resaltado/negrita), tamaño, posición y color; quemados en el video.
+- 💬 **Subtítulos estilo CapCut**: **transcripción automática con Gemini** (IA gratis) que reconoce tu voz en off, o manual; estilos (clásico/contorno/resaltado/negrita), tamaño, posición y color; quemados en el video.
 - 🟣 **Resalta los clicks** con un pulso animado.
 - 🎙️ **Voz en off**: graba tu micrófono y escúchalo mientras editas (silenciado durante el export).
 - 🎬 **Editor**: intensidad/duración del zoom, padding, esquinas, color de fondo; previsualiza en vivo.

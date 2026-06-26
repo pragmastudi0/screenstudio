@@ -148,8 +148,15 @@
         </div>
         <div id="subsControls" style="display:none">
           <div class="grp">
+            <label class="ctl">Transcripción automática (IA)</label>
+            <input id="geminiKey" class="field" type="password" placeholder="API key de Gemini (gratis)" />
+            <button id="subsAI" class="btn primary sm" style="margin-top:8px;width:100%">✨ Transcribir con Gemini</button>
+            <p class="hint" style="margin-top:6px">Reconoce tu voz en off automáticamente. Saca la key gratis en <b>aistudio.google.com/apikey</b>.</p>
+          </div>
+          <div class="grp">
+            <label class="ctl">…o escríbelos a mano</label>
             <textarea id="subsText" class="field" rows="3" placeholder="Pega aquí tu guion o narración…"></textarea>
-            <button id="subsGen" class="btn ghost sm" style="margin-top:8px;width:100%">✨ Generar subtítulos</button>
+            <button id="subsGen" class="btn ghost sm" style="margin-top:8px;width:100%">Generar desde texto</button>
           </div>
           <div class="grp">
             <label class="ctl">Estilo</label>

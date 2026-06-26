@@ -300,6 +300,51 @@ function generateSubtitles() {
   if (!S.playing) drawAt(video.currentTime);
 }
 
+async function transcribeWithAI() {
+  if (!S.recordedBlob) {
+    showToast("Graba algo primero.");
+    return;
+  }
+  const key = $("geminiKey").value.trim();
+  if (!key) {
+    showToast("Pega tu API key de Gemini (aistudio.google.com/apikey).");
+    return;
+  }
+  const btn = $("subsAI");
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Transcribiendo…";
+  try {
+    const buf = new Uint8Array(await S.recordedBlob.arrayBuffer());
+    const r = await window.studio.transcribe({ video: buf, apiKey: key });
+    if (!r.ok) {
+      showToast(`IA: ${r.error}`);
+      return;
+    }
+    S.subs = (r.cues || [])
+      .map((c) => ({
+        start: Number(c.start) || 0,
+        end: Number(c.end) || (Number(c.start) || 0) + 2,
+        text: String(c.text || "").trim(),
+      }))
+      .filter((c) => c.text)
+      .sort((a, b) => a.start - b.start);
+    if (!S.settings.subsOn) {
+      S.settings.subsOn = true;
+      $("subsOn").checked = true;
+      $("subsControls").style.display = "";
+    }
+    renderSubsList();
+    if (!S.playing) drawAt(video.currentTime);
+    showToast(`Subtítulos generados con IA (${S.subs.length}) ✓`, true);
+  } catch (e) {
+    showToast(`Error: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
 function renderSubsList() {
   const box = $("subsList");
   if (!box) return;
@@ -937,6 +982,10 @@ function bindControls() {
     if (!S.playing) drawAt(video.currentTime);
   };
   $("subsGen").onclick = generateSubtitles;
+  $("subsAI").onclick = transcribeWithAI;
+  window.studio.getApiKey().then((k) => {
+    if (k) $("geminiKey").value = k;
+  });
   $("subStyle").onchange = (e) => { S.settings.subStyle = e.target.value; if (!S.playing) drawAt(video.currentTime); };
   $("subPos").onchange = (e) => { S.settings.subPos = e.target.value; if (!S.playing) drawAt(video.currentTime); };
   link("subSize", (v) => { S.settings.subSize = v / 100; $("subSizeVal").textContent = `${v}%`; });

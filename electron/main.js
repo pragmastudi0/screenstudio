@@ -151,24 +151,9 @@ ipcMain.on("stop-capture", () => {
   }
 });
 
-// Convierte un WebM a MP4/MOV (H.264 + AAC, +faststart) con ffmpeg.
-function transcode(inputPath, outputPath) {
+function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) return reject(new Error("ffmpeg no disponible"));
-    const args = [
-      "-y",
-      "-i", inputPath,
-      "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-pix_fmt", "yuv420p",
-      // H.264 exige dimensiones pares: redondea ancho/alto al par inferior.
-      "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-      "-crf", "20",
-      "-c:a", "aac",
-      "-b:a", "160k",
-      "-movflags", "+faststart",
-      outputPath,
-    ];
     const proc = spawn(ffmpegPath, args);
     let err = "";
     proc.stderr.on("data", (d) => (err += d.toString()));
@@ -177,6 +162,79 @@ function transcode(inputPath, outputPath) {
       code === 0 ? resolve() : reject(new Error("ffmpeg falló: " + err.slice(-400))),
     );
   });
+}
+
+// Convierte un WebM a MP4/MOV (H.264 + AAC, +faststart). Dimensiones pares.
+function transcode(inputPath, outputPath) {
+  return runFfmpeg([
+    "-y", "-i", inputPath,
+    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+    "-crf", "20", "-c:a", "aac", "-b:a", "160k",
+    "-movflags", "+faststart",
+    outputPath,
+  ]);
+}
+
+// Extrae el audio (voz en off) a MP3 mono para la transcripción.
+function extractAudio(inputPath, outputPath) {
+  return runFfmpeg(["-y", "-i", inputPath, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k", outputPath]);
+}
+
+// ── Config persistente (API key de Gemini) ──
+function configPath() {
+  return path.join(app.getPath("userData"), "config.json");
+}
+function readConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(configPath(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+function writeConfig(c) {
+  try {
+    fs.writeFileSync(configPath(), JSON.stringify(c));
+  } catch {}
+}
+
+function cleanJson(text) {
+  const c = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  try {
+    return JSON.parse(c);
+  } catch {
+    const m = c.match(/\[[\s\S]*\]/);
+    if (m) return JSON.parse(m[0]);
+    throw new Error("respuesta IA no es JSON");
+  }
+}
+
+// Transcribe el audio con Gemini (API gratuita) y devuelve cues con tiempos.
+async function geminiTranscribe(apiKey, audioBase64) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const prompt =
+    "Transcribe este audio en su idioma original. Devuelve EXCLUSIVAMENTE un array JSON " +
+    'de objetos {"start": number, "end": number, "text": string}, donde start y end son ' +
+    "segundos desde el inicio del audio y cada text es una línea corta de subtítulo " +
+    "(máximo 8 palabras). No agregues explicaciones ni nada fuera del JSON.";
+  const body = {
+    contents: [
+      { parts: [{ inline_data: { mime_type: "audio/mp3", data: audioBase64 } }, { text: prompt }] },
+    ],
+    generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Gemini ${res.status}: ${t.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  return cleanJson(text);
 }
 
 // format: "webm" (directo) | "mp4" | "mov" (transcodifica con ffmpeg).
@@ -224,6 +282,38 @@ ipcMain.handle("save-video", async (_e, { buffer, suggested, format }) => {
     }
   } finally {
     fs.rmSync(tmp, { force: true });
+  }
+});
+
+// ── Transcripción automática con Gemini ──
+ipcMain.handle("get-api-key", () => readConfig().geminiKey || "");
+
+ipcMain.handle("transcribe", async (_e, { video, apiKey }) => {
+  try {
+    if (apiKey) {
+      const c = readConfig();
+      c.geminiKey = apiKey;
+      writeConfig(c);
+    }
+    const key = apiKey || readConfig().geminiKey;
+    if (!key) return { ok: false, error: "Falta la API key de Gemini" };
+    if (!ffmpegPath) return { ok: false, error: "ffmpeg no disponible; ejecuta npm install" };
+
+    const stamp = Date.now();
+    const tmpV = path.join(os.tmpdir(), `pss-${stamp}.webm`);
+    const tmpA = path.join(os.tmpdir(), `pss-${stamp}.mp3`);
+    try {
+      fs.writeFileSync(tmpV, Buffer.from(video));
+      await extractAudio(tmpV, tmpA);
+      const b64 = fs.readFileSync(tmpA).toString("base64");
+      const cues = await geminiTranscribe(key, b64);
+      return { ok: true, cues };
+    } finally {
+      fs.rmSync(tmpV, { force: true });
+      fs.rmSync(tmpA, { force: true });
+    }
+  } catch (e) {
+    return { ok: false, error: e.message };
   }
 });
 
