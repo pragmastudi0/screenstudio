@@ -4,6 +4,7 @@ App de escritorio (Electron) para **grabar tu pantalla con zoom automático haci
 
 ## ✨ Qué hace
 
+- 🎬 **Director IA (magia por defecto)**: al terminar de grabar, el editor ya te entrega el video montado — recorta el tiempo muerto, arma los zooms y aplica un look, según el **Estilo** elegido (SaaS Clean · Apple Keynote · Dark Premium). Editar es opcional.
 - 🖥️ **Graba pantalla completa o una ventana** (elige la fuente).
 - ⏱️ **Cuenta regresiva** y **auto-minimiza** la ventana al grabar (no sale en el video). Detén con **⌘5 / Ctrl+5**.
 - ✂️ **Recorta inicio/fin** con manijas en la línea de tiempo; el export respeta el recorte.

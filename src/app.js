@@ -4,7 +4,9 @@ import {
   segmentsToKeyframes,
   sampleZoom,
   samplePath,
+  setEasing,
 } from "./zoom.js";
+import { STYLES, DEFAULT_STYLE, computeAutoTrim } from "./director.js";
 
 // ───────────────────────── Estado ─────────────────────────
 const S = {
@@ -25,6 +27,7 @@ const S = {
   segments: [], // zooms editables
   selectedSegId: null,
   subs: [], // {start, end, text}
+  styleKey: DEFAULT_STYLE,
   blobUrl: null,
   duration: 0,
 
@@ -33,6 +36,7 @@ const S = {
     sensitivity: "med",
     zoom: 2.0,
     hold: 1.8,
+    motion: "smooth", // smooth | snappy
     clickFx: true,
     cursor: "hand", // hand | spotlight | off
     padding: 0.06,
@@ -215,8 +219,8 @@ function stopRecording() {
 async function onRecordingStopped() {
   S.recordedBlob = new Blob(S.chunks, { type: "video/webm" });
   await loadVideoBlob(S.recordedBlob);
-  S.segments = buildSegments(S.clicks, SENSITIVITY[S.settings.sensitivity]);
   S.subs = [];
+  applyStyle(S.styleKey || DEFAULT_STYLE); // 🎬 magia por defecto
   enterEditor();
 }
 
@@ -259,6 +263,7 @@ function enterEditor() {
 // Vuelca S.settings a los controles (útil al abrir un proyecto guardado).
 function applySettingsToUI() {
   const s = S.settings;
+  if ($("styleSel")) $("styleSel").value = S.styleKey;
   $("edAutozoom").checked = s.autozoom;
   $("sensitivity").value = s.sensitivity;
   $("zoomRange").value = Math.round(s.zoom * 100);
@@ -402,6 +407,7 @@ async function saveProjectFn() {
   const state = {
     version: 1,
     duration: S.duration,
+    styleKey: S.styleKey,
     trimStart: S.trimStart,
     trimEnd: S.trimEnd,
     clicks: S.clicks,
@@ -432,6 +438,7 @@ async function openProjectFn() {
   S.segments = st.segments || [];
   S.subs = st.subs || [];
   S.settings = Object.assign(S.settings, st.settings || {});
+  S.styleKey = st.styleKey || S.styleKey;
   S.recordedBlob = new Blob([new Uint8Array(r.video)], { type: "video/webm" });
   await loadVideoBlob(S.recordedBlob);
   S.duration = st.duration || S.duration;
@@ -455,9 +462,41 @@ function showToast(msg, ok) {
 
 // ───────────────────────── Editor / render ─────────────────────────
 function recomputeZoom() {
+  setEasing(S.settings.motion);
   S.keyframes = S.settings.autozoom
     ? segmentsToKeyframes(S.segments, { zoom: S.settings.zoom, hold: S.settings.hold, lead: LEAD })
     : [];
+}
+
+// 🎬 Director: aplica un Estilo → look + cámara + recorte automático.
+// "Magia por defecto": deja el video montado sin que el usuario decida nada.
+function applyStyle(key) {
+  const st = STYLES[key] || STYLES[DEFAULT_STYLE];
+  S.styleKey = key in STYLES ? key : DEFAULT_STYLE;
+  Object.assign(S.settings, {
+    autozoom: true,
+    zoom: st.zoom,
+    hold: st.hold,
+    motion: st.motion,
+    padding: st.padding,
+    radius: st.radius,
+    bg: st.bg,
+    cursor: st.cursor,
+    clickFx: st.clickFx,
+    sensitivity: st.sensitivity,
+  });
+  // Recorte automático del tiempo muerto.
+  const tr = computeAutoTrim(S.clicks, S.moves, S.duration);
+  S.trimStart = tr.trimStart;
+  S.trimEnd = tr.trimEnd;
+  // Reconstruye los zooms según la sensibilidad del estilo (sin overrides).
+  S.segments = buildSegments(S.clicks, SENSITIVITY[st.sensitivity]);
+  S.selectedSegId = null;
+  recomputeZoom();
+  applySettingsToUI();
+  buildTimeline();
+  updateSegPanel();
+  if (!S.playing) drawAt(video.currentTime);
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -1085,6 +1124,11 @@ function bindControls() {
   $("cancelExport").onclick = () => {
     S.exportCancel = true;
     window.studio.cancelExport();
+  };
+  $("styleSel").onchange = (e) => applyStyle(e.target.value);
+  $("autoEdit").onclick = () => {
+    applyStyle(S.styleKey);
+    showToast("Video auto-editado ✨", true);
   };
   $("playBtn").onclick = () => (S.playing ? stopPlayback() : startPlayback());
   $("addZoom").onclick = addZoomAtPlayhead;

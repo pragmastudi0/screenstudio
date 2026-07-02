@@ -86,10 +86,17 @@ export function segmentsToKeyframes(segments, opts = {}) {
   return kfs;
 }
 
-function smoothstep(u) {
+// Curva de easing de la cámara. "smooth" = suave (Keynote);
+// "snappy" = arranca rápido y desacelera (se siente premium).
+let EASING = "smooth";
+export function setEasing(mode) {
+  EASING = mode || "smooth";
+}
+function ease(u) {
   if (u <= 0) return 0;
   if (u >= 1) return 1;
-  return u * u * (3 - 2 * u);
+  if (EASING === "snappy") return 1 - Math.pow(1 - u, 3); // easeOutCubic
+  return u * u * (3 - 2 * u); // smoothstep
 }
 
 // Interpola el zoom en el instante t.
@@ -104,7 +111,7 @@ export function sampleZoom(kfs, t) {
   const a = kfs[i];
   const b = kfs[i + 1];
   const span = b.t - a.t || 1e-6;
-  const u = smoothstep((t - a.t) / span);
+  const u = ease((t - a.t) / span);
   return {
     scale: a.scale + (b.scale - a.scale) * u,
     x: a.x + (b.x - a.x) * u,

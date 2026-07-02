@@ -143,6 +143,7 @@ button, input, label { -webkit-app-region: no-drag; }
 .progress { width: 280px; height: 8px; background: #18181b; border-radius: 6px; overflow: hidden; }
 .bar { height: 100%; width: 0%; background: linear-gradient(90deg,#8b5cf6,#e879f9); transition: width .2s; }
 
+.director { background: linear-gradient(180deg, rgba(139,92,246,.14), rgba(139,92,246,.05)); border: 1px solid rgba(139,92,246,.4); border-radius: 10px; padding: 12px; }
 .seg { background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.35); border-radius: 10px; padding: 12px; }
 .chip.sel { border-color: var(--primary); background: #241b3a; color: #fff; }
 
